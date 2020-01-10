@@ -1,0 +1,9 @@
+Pillow
+tqdm
+boto3
+scipy
+scikit-learn
+matplotlib
+numpy
+tqdm
+internetarchive
