@@ -14,8 +14,8 @@ import threading
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('-y', dest='year', type=int, required=True, help='The year for which to download videos.')
-    parser.add_argument('--subs', dest='subs_dir', type=str, default='subs',
-                        help='Directory to save captions to')
+    parser.add_argument('--local-out-path', dest='local_out_path', type=str, default='./',
+                        help='Directory to save videos and captions to. Defaults to the current working directory.')
     parser.add_argument('--list', dest='list_file', type=str,
                         help='File to write the list of downloaded videos')
     parser.add_argument('--gcs-video-path', dest='gcs_video_path', type=str, default='gs://esper/tvnews/videos',
@@ -62,7 +62,7 @@ def call_async(command):
     print("Starting asynchronous command", command)
     threading.Thread(target=call_helper, args=(command, )).start()
 
-def download_video_and_subs(identifier, subs_dir, gcs_video_path, gcs_caption_path):
+def download_video_and_subs(identifier, gcs_video_path, gcs_caption_path):
     try:
         check_call(['ia', 'download', '--glob=*.mp4', identifier])
         check_call(['ia', 'download', '--glob=*.srt', identifier])
@@ -73,22 +73,18 @@ def download_video_and_subs(identifier, subs_dir, gcs_video_path, gcs_caption_pa
         for fname in os.listdir(identifier):
             if fname.endswith('.mp4'):
                 local_path = os.path.join(identifier, fname)
-                cloud_path = gcs_video_path + '/' + fname
+                cloud_path = os.path.join(gcs_video_path, fname)
                 call_async(['gsutil', 'cp', '-n', local_path, cloud_path])
-            if fname.endswith('.srt'):
+            if fname.endswith('.srt') and gcs_caption_path is not None:
                 local_path = os.path.join(identifier, fname)
-                subs_path = os.path.join(subs_dir, fname)
-                shutil.copyfile(local_path, subs_path)
-                if gcs_caption_path is not None:
-                    gcs_subs_path = os.path.join(gcs_caption_path, fname)
-                    call_async(['gsutil', 'cp', '-n', local_path, gcs_subs_path])
+                cloud_path = os.path.join(gcs_caption_path, fname)
+                call_async(['gsutil', 'cp', '-n', local_path, cloud_path])
         # FIXME: probably want to keep the video files around locally
         # shutil.rmtree(identifier)
 
-
-def main(year, subs_dir, list_file, gcs_video_path, gcs_caption_path):
-    if not os.path.exists(subs_dir):
-        os.makedirs(subs_dir)
+def main(year, local_out_path, list_file, gcs_video_path, gcs_caption_path):
+    if not os.path.exists(local_out_path):
+        os.makedirs(local_out_path)
 
     print('Listing downloaded videos')
     downloaded = list_downloaded_videos(year, gcs_video_path)
@@ -104,8 +100,11 @@ def main(year, subs_dir, list_file, gcs_video_path, gcs_caption_path):
                 f.write('\n')
 
     print('Downloading')
+    # Change the current working directory so we download all files into the
+    # local_out_path
+    os.chdir(local_out_path)
     for identifier in tqdm(to_download):
-        download_video_and_subs(identifier, subs_dir, gcs_video_path, gcs_caption_path)
+        download_video_and_subs(identifier, gcs_video_path, gcs_caption_path)
 
 
 if __name__ == '__main__':
