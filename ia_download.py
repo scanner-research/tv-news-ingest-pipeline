@@ -5,8 +5,10 @@ import re
 import os
 import json
 import shutil
+import subprocess
 from subprocess import check_output, check_call
 from tqdm import tqdm
+import threading
 
 
 def get_args():
@@ -51,6 +53,14 @@ def list_ia_videos(year):
                     identifiers.append(identifier)
     return identifiers
 
+def call_helper(command):
+    retcode = subprocess.call(command, stdout=open(os.devnull, 'w'), stderr=subprocess.STDOUT)
+    if retcode != 0:
+        print("Command {} failed with exit code {}".format(command, retcode))
+
+def call_async(command):
+    print("Starting asynchronous command", command)
+    threading.Thread(target=call_helper, args=(command, )).start()
 
 def download_video_and_subs(identifier, subs_dir, gcs_video_path, gcs_caption_path):
     try:
@@ -64,16 +74,16 @@ def download_video_and_subs(identifier, subs_dir, gcs_video_path, gcs_caption_pa
             if fname.endswith('.mp4'):
                 local_path = os.path.join(identifier, fname)
                 cloud_path = gcs_video_path + '/' + fname
-                check_call(['gsutil', 'cp', '-n', local_path, cloud_path])
+                call_async(['gsutil', 'cp', '-n', local_path, cloud_path])
             if fname.endswith('.srt'):
                 local_path = os.path.join(identifier, fname)
                 subs_path = os.path.join(subs_dir, fname)
                 shutil.copyfile(local_path, subs_path)
                 if gcs_caption_path is not None:
                     gcs_subs_path = os.path.join(gcs_caption_path, fname)
-                    check_call(['gsutil', 'cp', '-n', local_path, gcs_subs_path])
+                    call_async(['gsutil', 'cp', '-n', local_path, gcs_subs_path])
         # FIXME: probably want to keep the video files around locally
-        shutil.rmtree(identifier)
+        # shutil.rmtree(identifier)
 
 
 def main(year, subs_dir, list_file, gcs_video_path, gcs_caption_path):
