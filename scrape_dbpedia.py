@@ -26,10 +26,19 @@ LINK_TYPES = ('wikiPageWikiLink', 'wikiPageExternalLink')
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('name_file', type=str,
-                        help='A text file, with one name per line')
-    parser.add_argument('out_dir', type=str,
-                        help='Directory to write scraped results to')
+    parser.add_argument(
+        'out_dir', type=str, help='Directory to write scraped results to')
+
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument(
+        '-l', '--list', dest='name_file', type=str,
+        help='A text file, with one name per line')
+    group.add_argument(
+        '-n', '--name', type=str, help='A single name')
+
+    parser.add_argument(
+        '-q', '--query', type=str,
+        help='A specific query corresponding to a specific name')
     return parser.parse_args()
 
 
@@ -58,12 +67,14 @@ def select_uri(name, uris):
         if name.lower() in resource.lower().replace('_', ' '):
             if name.lower() == resource.lower().replace('_', ' '):
                 plausible_uris.append((0, u))
+            elif 'television' in resource.lower():
+                plausible_uris.append((1, u))
             elif 'journalist' in resource.lower():
-                plausible_uris.append((0, u))
-            elif 'politic' in resource.lower():
-                plausible_uris.append((0, u))
+                plausible_uris.append((1, u))
             elif 'news' in resource.lower():
-                plausible_uris.append((0, u))
+                plausible_uris.append((1, u))
+            elif 'politic' in resource.lower():
+                plausible_uris.append((2, u))
             else:
                 plausible_uris.append((len(resource), u))
     if len(plausible_uris) == 0:
@@ -72,8 +83,16 @@ def select_uri(name, uris):
     return plausible_uris[0][1]
 
 
+def split_upper_join(s, delim=' '):
+    return delim.join(t[0].upper() + t[1:] for t in s.split(delim))
+
+
 def to_name_case(name):
-    return ' '.join(t[0].upper() + t[1:] for t in name.split())
+    name = split_upper_join(name)
+    name = split_upper_join(name, "'")
+    name = split_upper_join(name, '-')
+    name = split_upper_join(name, 'Mac')
+    return name
 
 
 def query_dbpedia(name):
@@ -123,7 +142,7 @@ def query_dbpedia(name):
                 elif r_prop_value.startswith('http://purl.org/'):
                     parsed_results.append(result)
         return {
-            'name': name,
+            'name': name_cased,
             'uri': selected_uri,
             'data': parsed_results,
             'other_uris': uris
@@ -135,28 +154,46 @@ def query_dbpedia(name):
 def process_single_name(name, out_path):
     if not os.path.exists(out_path):
         result = query_dbpedia(name)
-        with open(out_path, 'w') as f:
-            json.dump(result, f)
+        if result:
+            with open(out_path, 'w') as f:
+                json.dump(result, f)
         return result is not None
     return True
 
 
-def main(name_file, out_dir, n=4):
+def main(out_dir, name_file=None, name=None, query=None, n=4):
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
 
-    names = load_names(name_file)
-    with Pool(n) as p:
-        has_results = p.starmap(
-            process_single_name,
-            [(n, os.path.join(out_dir, '{}.json'.format(n))) for n in names])
-    print('Done!', file=sys.stderr)
+    def get_out_path(name):
+        return os.path.join(out_dir, '{}.json'.format(name))
 
-    names_wo_results = [a for a, b in zip(names, has_results) if not b]
-    if names_wo_results:
-        print('The following names are missing results:')
-        for name in names_wo_results:
-            print(name)
+    if name_file:
+        assert query is None, 'Specific queries are not allowed with a file'
+        names = load_names(name_file)
+        with Pool(n) as p:
+            has_results = p.starmap(
+                process_single_name, [(n, get_out_path(n)) for n in names])
+        print('Done!', file=sys.stderr)
+
+        names_wo_results = [a for a, b in zip(names, has_results) if not b]
+        if names_wo_results:
+            print('The following names are missing results:')
+            for name in names_wo_results:
+                print(name)
+    elif name:
+        result = query_dbpedia(query if query else name)
+        if result:
+            out_path = get_out_path(name)
+            with open(out_path, 'w') as f:
+                json.dump(result, f)
+            print('Success!', file=sys.stderr)
+        else:
+            print('No entry found!... try again with a different query?',
+                  file=sys.stderr)
+    else:
+        raise Exception('Unreachable')
+
 
 
 if __name__ == '__main__':
