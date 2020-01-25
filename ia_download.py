@@ -4,7 +4,9 @@ import argparse
 import re
 import os
 import json
+import time
 import shutil
+import datetime
 import subprocess
 from subprocess import check_output, check_call
 from tqdm import tqdm
@@ -15,7 +17,8 @@ prefixes = ['MSNBC', 'MSNBCW', 'CNN', 'CNNW', 'FOXNEWS', 'FOXNEWSW']
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-y', dest='year', type=int, required=True, help='The year for which to download videos.')
+    parser.add_argument('-y', dest='year', type=int, default=None,
+                        help='The year for which to download videos. If not specified, defaults to year it was yesterday.')
     parser.add_argument('--local-out-path', dest='local_out_path', type=str, default='./',
                         help='Directory to save videos and captions to. Defaults to the current working directory.')
     parser.add_argument('--list', dest='list_file', type=str,
@@ -43,9 +46,10 @@ def list_downloaded_videos(year, gcs_video_path):
         try:
             output = check_output(
                 ['gsutil', 'ls', '{}/{}_{}*'.format(gcs_video_path, prefix, year)]).decode()
-            videos = [parse_ia_identifier(x) for x in output.split('\n') if x.strip()]
+            videos |= {parse_ia_identifier(x) for x in output.split('\n') if x.strip()}
         except subprocess.CalledProcessError as e:
-            print("Error during gsutil ls. If it's just no matches, don't worry.")
+            # It's probably just no matches, which is fine
+            pass
     return videos
 
 
@@ -63,7 +67,8 @@ def list_ia_videos(year):
                     identifiers.append(identifier)
     return identifiers
 
-def download_video_and_subs(identifier, gcs_video_path, gcs_caption_path):
+def download_video_and_subs(args):
+    identifier, gcs_video_path, gcs_caption_path = args
     try:
         check_call(['ia', 'download', '--glob=*.mp4', identifier])
         check_call(['ia', 'download', '--glob=*.srt', identifier])
@@ -87,6 +92,10 @@ def main(year, local_out_path, list_file, gcs_video_path, gcs_caption_path, num_
     if not os.path.exists(local_out_path):
         os.makedirs(local_out_path)
 
+    if year is None:
+        year = (datetime.datetime.now() - datetime.timedelta(days=1)).year
+        print("Year not specified. Downloading data for {}.".format(year))
+
     print('Listing downloaded videos')
     downloaded = list_downloaded_videos(year, gcs_video_path)
 
@@ -106,9 +115,10 @@ def main(year, local_out_path, list_file, gcs_video_path, gcs_caption_path, num_
     os.chdir(local_out_path)
     pool = Pool(processes = num_processes)
     num_done = 0
-    for _ in pool.starmap(download_video_and_subs, [(identifier, gcs_video_path, gcs_caption_path) for identifier in to_download]):
+    start_time = time.time()
+    for _ in pool.imap_unordered(download_video_and_subs, [(identifier, gcs_video_path, gcs_caption_path) for identifier in to_download]):
         num_done+=1
-        print("Finished downloading {} of {}".format(num_done, len(to_download)))
+        print("Finished downloading {} of {} in {} seconds".format(num_done, len(to_download), time.time() - start_time))
 
 
 if __name__ == '__main__':
