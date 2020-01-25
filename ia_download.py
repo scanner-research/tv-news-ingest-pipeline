@@ -53,14 +53,15 @@ def list_ia_videos(year):
                     identifiers.append(identifier)
     return identifiers
 
-def call_helper(command):
+def call_helper(command, callback):
     retcode = subprocess.call(command, stdout=open(os.devnull, 'w'), stderr=subprocess.STDOUT)
-    if retcode != 0:
-        print("Command {} failed with exit code {}".format(command, retcode))
+    print("Command {} finished with exit code {}".format(command, retcode))
+    if callback is not None:
+        callback()
 
-def call_async(command):
+def call_async(command, callback=None):
     print("Starting asynchronous command", command)
-    threading.Thread(target=call_helper, args=(command, )).start()
+    threading.Thread(target=call_helper, args=(command, callback)).start()
 
 def download_video_and_subs(identifier, gcs_video_path, gcs_caption_path):
     try:
@@ -74,7 +75,7 @@ def download_video_and_subs(identifier, gcs_video_path, gcs_caption_path):
             if fname.endswith('.mp4'):
                 local_path = os.path.join(identifier, fname)
                 cloud_path = os.path.join(gcs_video_path, fname)
-                call_async(['gsutil', 'cp', '-n', local_path, cloud_path])
+                call_async(['gsutil', 'cp', '-n', local_path, cloud_path], lambda: shutil.rmtree(identifier))
             if fname.endswith('.srt') and gcs_caption_path is not None:
                 local_path = os.path.join(identifier, fname)
                 cloud_path = os.path.join(gcs_caption_path, fname)
