@@ -1,0 +1,5 @@
+docker-compose.yml
+db_name
+__pycache__/
+*.mp4
+aws-credentials.csv
