@@ -16,6 +16,8 @@ script takes the video(s) through the following stages:
 
     - face identification (identify_faces_with_aws.py)
 
+    - gender classification (classify_gender.py)
+
 """
 
 import argparse
