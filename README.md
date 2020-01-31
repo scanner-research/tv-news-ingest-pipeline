@@ -8,5 +8,5 @@
 * All tv-news-ingest-pipeline scripts should be contained in same 
   directory as 'docker-compose.yml'
 
-Run `python3 pipeline.py {batch_textfile_path} {output_dirpath}`
+Run `python3 pipeline.py <batch_textfile_path> <output_dirpath>`
 
