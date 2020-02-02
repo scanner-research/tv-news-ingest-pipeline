@@ -18,6 +18,24 @@ script takes the video(s) through the following stages:
 
     - gender classification (classify_gender.py)
 
+
+Sample output directory after pipeline completion:
+
+    output_dir/
+    ├── video_name1
+    │   ├── bboxes.json
+    │   ├── black_frames.json
+    │   ├── embeddings.json
+    │   ├── genders.json
+    │   ├── identities.json
+    │   ├── metadata.json
+    │   └── montages
+    │       ├── 0.json
+    │       └── 0.png
+    ├── video_name2
+    │   └── ...
+    └── ... 
+
 """
 
 import argparse
@@ -78,16 +96,31 @@ def main(video_path, output_path, use_cloud, resilient, host, service):
         classify_gender.process_single(in_file, out_file)
 
 
-def create_output_dirs(video_path, output_path):
+def create_output_dirs(video_path: str, output_path: str):
+    """
+    Creates output subdirectories for each video being processed.
+    Necessary due to docker container processes being owned by root.
+
+    Args:
+        video_path: path to the video file or textfile containing filepaths.
+        output_path: path to the output directory.
+
+    """
+
     if not video_path.endswith('.mp4'):
         with open(video_path, 'r') as f:
             video_paths = [l.strip() for l in f if l.strip()]
-            out_paths = [os.path.join(output_path, get_base_name(v))
-                         for v in video_paths]
-            for out in out_paths:
-                if not os.path.exists(out):
-                    os.makedirs(out)
 
+        out_paths = [os.path.join(output_path, get_base_name(v))
+                     for v in video_paths]
+        for out in out_paths:
+            if not os.path.exists(out):
+                os.makedirs(out)
+    else:
+        if os.path.exists(output_path):
+            os.makedirs(output_path)
+        
+    
 
 def build_scanner_component_command(video_path, output_path, use_cloud):
     cmd = ['python3', 'scanner_component.py', video_path, output_path]

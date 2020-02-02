@@ -54,15 +54,6 @@ def main(input_path: str, output_path: str):
     #    process_single(in_path, out_path)
 
 
-def predict_gender(x):
-    return 'F' if clf.predict([x]) == 1 else 'M'
-
-
-def predict_gender_score(x):
-    # FIXME: this was not tested. Need to check if this is sane
-    return max(clf.predict_proba([x])[0])
-
-
 def process_single(in_file, out_file):
     # Load the detected faces and embeddings and run the classifier
     result = [
@@ -71,6 +62,15 @@ def process_single(in_file, out_file):
     ]
 
     save_json(result, out_file)
+
+
+def predict_gender(x):
+    return 'F' if clf.predict([x]) == 1 else 'M'
+
+
+def predict_gender_score(x):
+    # FIXME: this was not tested. Need to check if this is sane
+    return max(clf.predict_proba([x])[0])
 
 
 if __name__ == '__main__':
