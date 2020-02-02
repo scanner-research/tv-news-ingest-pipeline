@@ -35,11 +35,10 @@ def montage(input_paths, width, height):
 
 
 if __name__ == '__main__':
-	# for i in range(27):
-	# 	demontage("CNNW_20200124_140000_CNN_Newsroom_With_Poppy_Harlow_and_Jim_Sciutto/{}.png".format(i))
+	# for i in range(55):
+	# 	demontage("debate_montages/{}.png".format(i))
 	
-	for width in range(1, 11):
-		for height in range(1, 11):
-			montage(sorted(glob.glob('minis/*')), width, height)
+	for width, height in [(2, 4), (4, 2)]:
+		montage(sorted(glob.glob('minis/*')), width, height)
 
 

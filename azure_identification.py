@@ -36,7 +36,7 @@ def load_client(credential_file):
         region_name='us-west-1')
 
 
-def search_aws(img_file):
+def search_aws(img_file, width, height):
     img_data = read_img(img_file)
     global CLIENT
     if CLIENT is None:
@@ -48,9 +48,16 @@ def search_aws(img_file):
     for i in range(1):
         try:
             resp = CLIENT.recognize_celebrities(Image={'Bytes': img_data})
-            print(resp)
-            return [x['Name'] for x in resp['CelebrityFaces']]
+            faces = {}
+            for face in resp['CelebrityFaces']:
+                name = face['Name']
+                coordinates = face['Face']['BoundingBox']
+                xcoord = int((coordinates['Left'] + coordinates['Width'] / 2) * width)
+                ycoord = int((coordinates['Top'] + coordinates['Height'] / 2) * height)
+                faces[(xcoord, ycoord)] = name
+            return faces
         except Exception as e:
+            print("AWS API failure", str(e))
             return ['Error']
 
 def search_azure(img_file):
@@ -83,15 +90,38 @@ def search_azure(img_file):
                     and 'celebrities' in x['detail']):
                 for y in x['detail']['celebrities']:
                     name = y['name']
+                    if name == 'Peter Buttigieg':
+                        name = 'Pete Buttigieg'
                     coordinates = y['faceRectangle']
                     xmean = coordinates['left'] + coordinates['width'] / 2
                     ymean = coordinates['top'] + coordinates['height'] / 2
-                    names[int(xmean // 200), int(ymean // 200)] = y['name']
+                    names[int(xmean // 200), int(ymean // 200)] = name
         # TODO: use confidence score
     else:
         print('Request failed: {}'.format(resp.status_code))
         return ['Error']
     return names
+
+def analyze_size(width, height):
+    path = "{:02d}x{:02d}/".format(width, height)
+    files = list(sorted(glob.glob(path + "*")))
+    labels = [""] * (width * height * len(files))
+    for identifier, out_path in [
+            (lambda file: search_aws(file, width, height), 'aws_labels.txt'),
+            (lambda file: search_azure(file), 'azure_labels.txt')
+        ]:
+        for i, file in enumerate(files):
+                identities = identifier(file)
+                print(identities)
+                for y in range(height):
+                    for x in range(width):
+                        index = i * width * height + y * width + x
+                        if (x, y) in identities:
+                            labels[index] = identities[(x, y)]
+
+        print("{} of {} faces identified".format(sum([x != "" for x in labels]), len(labels)))
+        with open(path + out_path, "w") as f:
+            f.write("\n".join(labels))
 
 def load_json(fname):
     with open(fname) as f:
@@ -157,14 +187,5 @@ def main(video_dir, limit):
                         cluster_id, face_id)))
 
 if __name__ == '__main__':
-    # main(**vars(get_args()))
-    print("globbing")
-    files = list(sorted(glob.glob('02x02/*')))
-    # random.shuffle(files)
-    print("globbed", len(files))
-    print("File\tAzure\tAmazon")
-    for file in files[:5]: # files[:1000]:
-        try:
-            print("}\t{".join([file, str(search_azure(file)), ",".join(search_aws(file))]))
-        except Exception as e:
-            print("Failure", file, e)
+    analyze_size(4, 8)
+    analyze_size(8, 4)
