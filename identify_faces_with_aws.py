@@ -1,29 +1,61 @@
 #!/usr/bin/env python3
 
+"""
+File: identify_faces_with_aws.py
+--------------------------------
+Identifies faces from face montages through AWS.
+
+Input:
+
+    - Path to directory containing one subdirectory per video:
+    
+      "path/to/<input_dir>" where <input_dir> looks like
+
+        <input_dir>/
+            - <video1>/
+            - <video2>/
+            ...
+
+This script creates the following outputs within the video subdirectories:
+
+    <input_dir>/
+        - <video1>/
+            - identities.json
+        - <video2>/
+            - identities.json
+        ...
+
+where there is one JSON file per video containing a list of (face_id, identity)
+tuples.
+
+"""
+
 import argparse
 import os
 import json
+import glob
 import boto3
 import math
 import shutil
 import time
-
 from subprocess import check_call
 from PIL import Image, ImageDraw
 from tqdm import tqdm
 from multiprocessing import Pool
 
+from utils import load_json, save_json
+from consts import OUTFILE_IDENTITIES
 
 SAVE_DEBUG_IMAGES = False
-
-
+CREDENTIAL_FILE = None
 CLIENT = None
 
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('input_path', type=str)
-    parser.add_argument('output_dir', type=str)
+    parser.add_argument('input_dir', type=str,
+        help='path to directory containing montage folders')
+    parser.add_argument('output_dir', type=str, help='path to output directory')
     parser.add_argument('--limit', type=int)
     parser.add_argument('--debug-dir', type=str, default='debug')
 
@@ -38,13 +70,93 @@ def get_args():
     return parser.parse_args()
 
 
+def main(input_dir, output_dir, debug_dir, credential_file, limit, save_img,
+         parallelism):
+
+    global SAVE_DEBUG_IMAGES, CREDENTIAL_FILE
+    SAVE_DEBUG_IMAGES = save_img
+    CREDENTIAL_FILE = credential_file
+
+    video_names = list(os.listdir(input_dir))
+
+    if not os.path.isdir(output_dir):
+        os.makedirs(output_dir)
+
+    with Pool(parallelism) as workers, \
+            tqdm(total=len(video_names), desc='Identifying faces') as pbar:
+        def update_pbar(x):
+            pbar.update(1)
+
+        results = []
+
+        for video_name in video_names:
+            in_path = os.path.join(input_dir, video_name, 'montages')
+            out_path = os.path.join(input_dir, video_name, OUTFILE_IDENTITIES)
+            if not os.path.exists(out_path):
+                if debug_dir:
+                    debug_path = os.path.join(debug_dir, video_name)
+                else:
+                    debug_path = None
+
+                result = workers.apply_async(
+                    process_video,
+                    args=(video_name, in_path, out_path, debug_path),
+                    callback=update_pbar)
+                results.append(result)
+            else:
+                update_pbar(None)
+
+        for result in results:
+            result.get()
+        workers.close()
+        workers.join()
+
+
+def process_video(video_name, in_path, out_path, debug_dir):
+    if not os.path.exists(debug_dir):
+        os.makedirs(debug_dir)
+
+    remove_on_done = False
+    if in_path.startswith('gs://'):
+        try:
+            input_dir = load_from_gcs(in_path, video_name)
+        except Exception as e:
+            print('Failed:', video_name, '-', e)
+            return
+        remove_on_done = True
+    else:
+        assert os.path.isdir(in_path)
+        input_dir = in_path
+
+    img_files = [img for img in sorted(os.listdir(input_dir))
+                 if img.endswith('.png')]
+    # print('Processing video:', video_name, '({} chunks)'.format(len(img_files)))
+    video_labels = []
+    for img_file in sorted(img_files, key=lambda x: int(x.split('.')[0])):
+        img_prefix = os.path.splitext(img_file)[0]
+        img_path = os.path.join(input_dir, img_file)
+        meta_path = os.path.join(input_dir, img_prefix + '.json')
+        if os.path.exists(meta_path):
+            if debug_dir:
+                debug_prefix = os.path.join(debug_dir, img_prefix)
+            else:
+                debug_prefix = None
+            group_labels = submit_image_for_labeling(
+                img_path, meta_path, debug_prefix)
+            video_labels.extend(group_labels)
+        else:
+            print('Missing metdata for:', img_path)
+
+    save_json(video_labels, out_path)
+
+    if remove_on_done:
+        print('Removing:', input_dir)
+        shutil.rmtree(input_dir)
+
+
 def read_img(img):
     with open(img, 'rb') as f:
         return f.read()
-
-
-CREDENTIAL_FILE = None
-CLIENT = None
 
 
 def load_client(credential_file):
@@ -75,11 +187,6 @@ def search_aws(img_data):
             print('Error (retry in {}s):'.format(delay), e)
             time.sleep(delay)
     raise Exception('Too many timeouts: {}'.format(e))
-
-
-def load_json(fname):
-    with open(fname) as f:
-        return json.load(f)
 
 
 def split_list(L, n):
@@ -176,7 +283,7 @@ def submit_image_for_labeling(img_path, meta_path, debug_prefix):
     img_meta = load_json(meta_path)
     cols = img_meta['cols']
     block_size = img_meta['block_dim']
-    img_ids = img_meta['ids']
+    img_ids = img_meta['content']
 
     if debug_prefix:
         debug_path = debug_prefix + '.response.json'
@@ -212,117 +319,10 @@ def submit_image_for_labeling(img_path, meta_path, debug_prefix):
     return results
 
 
-def process_video(video_name, video_path, out_path, debug_dir):
-    if not os.path.exists(debug_dir):
-        os.makedirs(debug_dir)
-
-    remove_on_done = False
-    if video_path.startswith('gs://'):
-        try:
-            input_dir = load_from_gcs(video_path, video_name)
-        except Exception as e:
-            print('Failed:', video_name, '-', e)
-            return
-        remove_on_done = True
-    else:
-        assert os.path.isdir(video_path)
-        input_dir = video_path
-
-    img_files = [img for img in sorted(os.listdir(input_dir))
-                 if img.endswith('.png')]
-    print('Processing video:', video_name, '({} chunks)'.format(len(img_files)))
-    video_labels = []
-    for img_file in sorted(img_files, key=lambda x: int(x.split('.')[0])):
-        img_prefix = os.path.splitext(img_file)[0]
-        img_path = os.path.join(input_dir, img_file)
-        meta_path = os.path.join(input_dir, img_prefix + '.json')
-        if os.path.exists(meta_path):
-            if debug_dir:
-                debug_prefix = os.path.join(debug_dir, img_prefix)
-            else:
-                debug_prefix = None
-            group_labels = submit_image_for_labeling(
-                img_path, meta_path, debug_prefix)
-            video_labels.extend(group_labels)
-        else:
-            print('Missing metdata for:', img_path)
-
-    with open(out_path, 'w') as f:
-        json.dump(video_labels, f)
-
-    if remove_on_done:
-        print('Removing:', input_dir)
-        shutil.rmtree(input_dir)
-
-
-def read_file(fname):
-    lines = []
-    with open(fname) as f:
-        for l in f:
-            l = l.strip()
-            if l:
-                lines.append(l)
-    return lines
-
-
 def load_from_gcs(gcs_path, video_name):
     tmp_path = '/tmp/{}'.format(video_name)
     check_call(['gsutil', '-q', '-m', 'cp', '-r', gcs_path, '/tmp/'])
     return tmp_path
-
-
-def main(input_path, output_dir, debug_dir, credential_file, limit, save_img,
-         parallelism):
-    global SAVE_DEBUG_IMAGES
-    SAVE_DEBUG_IMAGES = save_img
-
-    global CREDENTIAL_FILE
-    CREDENTIAL_FILE = credential_file
-
-    if os.path.isfile(input_path):
-        video_paths = list(sorted(read_file(input_path)))
-    else:
-        video_paths = list(sorted([
-            os.path.join(input_path, video_name)
-            for video_name in os.listdir(input_path)
-        ]))
-
-    if not os.path.isdir(output_dir):
-        os.makedirs(output_dir)
-
-    with Pool(parallelism) as workers, \
-            tqdm(total=len(video_paths), desc='Labeling') as pbar:
-        def update_pbar(x):
-            pbar.update(1)
-
-        results = []
-
-        for video_path in video_paths:
-            if video_path.endswith('/'):
-                video_name = video_path.split('/')[-2]
-            else:
-                video_name = video_path.split('/')[-1]
-            assert video_name
-            out_path = os.path.join(output_dir, video_name + '.json')
-            if not os.path.exists(out_path):
-                if debug_dir:
-                    debug_path = os.path.join(debug_dir, video_name)
-                else:
-                    debug_path = None
-
-                result = workers.apply_async(
-                    process_video,
-                    args=(video_name, video_path, out_path, debug_path),
-                    callback=update_pbar)
-                results.append(result)
-            else:
-                update_pbar(None)
-
-        for result in results:
-            result.get()
-        workers.close()
-        workers.join()
-    print('Done')
 
 
 if __name__ == '__main__':

@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 
 import argparse
-import json
+import glob
 import os
+
 import numpy as np
 from tqdm import tqdm
 from sklearn.neighbors import KNeighborsClassifier
 
+from utils import save_json, load_json, get_base_name
+from consts import OUTFILE_GENDERS
 
 GENDER_TRAIN_X_FILE = 'gender_model/train_X.npy'
 GENDER_TRAIN_Y_FILE = 'gender_model/train_y.npy'
@@ -20,16 +23,35 @@ clf.fit(train_X, train_y)
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('in_path', type=str,
-                        help='Directory or file containing face embeddings')
-    parser.add_argument('out_path', type=str,
-                        help='Directory or file to output results to')
+    parser.add_argument('input_path', type=str,
+                        help='file containing face embeddings')
+    parser.add_argument('output_path', type=str,
+                        help='file to output results to')
     return parser.parse_args()
 
 
-def load_json(fname):
-    with open(fname) as f:
-        return json.load(f)
+def main(input_path: str, output_path: str):
+    if not os.path.exists(os.path.dirname(output_path)):
+        os.makedirs(os.path.dirname(output_path))
+
+    process_single(input_path, output_path)
+
+    if os.path.isdir(in_path):
+        if not os.path.exists(out_path):
+            os.makedirs(out_path)
+
+        input_files = glob.glob(os.path.join(in_path, '*_embeddings.json'))
+        for in_file in tqdm(input_files):
+            video_name = get_base_name(in_file)[:-len('_embeddings')]
+            out_file = os.path.join(out_path, video_name + '.json')
+            process_single(in_file, out_file)
+
+    #else:
+    #    # Single video case
+    #    if os.path.isdir(out_path):
+    #        out_path = os.path.join(out_path,
+    #                                get_video_name(in_path) + '.json')
+    #    process_single(in_path, out_path)
 
 
 def predict_gender(x):
@@ -43,41 +65,12 @@ def predict_gender_score(x):
 
 def process_single(in_file, out_file):
     # Load the detected faces and embeddings and run the classifier
-    print('Classifying gender:', in_file)
-    result = []
-    for frame_num, faces in load_json(in_file):
-        face_emb = f['emb']
-        result.append((
-            frame_num, [{
-                'bbox': f['bbox'],
-                'gender': predict_gender(face_emb),
-                'gender_score': predict_gender_score(face_emb)
-            } for f in faces]
-        ))
-    with open(out_file, 'w') as f:
-        json.dump(result, f)
-    print('Wrote labels:', out_file)
+    result = [
+        (face_id, predict_gender(embed), predict_gender_score(embed))
+        for face_id, embed in load_json(in_file)
+    ]
 
-
-def get_video_name(x):
-    return os.splitext(x.split('/')[-1])[0]
-
-
-def main(in_path: str, out_path: str):
-    if os.path.isdir(in_path):
-        if not os.path.exists(out_path):
-            os.makedirs(out_path)
-        for video_in_file in tqdm(os.listdir(in_path)):
-            video_in_path = os.path.join(in_path, video_in_file)
-            video_out_file = get_video_name(video_in_file) + '.json'
-            video_out_path = os.path.join(out_path, video_out_file)
-            process_single(video_in_path, video_out_path)
-    else:
-        # Single video case
-        if os.path.isdir(out_path):
-            out_path = os.path.join(out_path,
-                                    get_video_name(in_path) + '.json')
-        process_single(in_path, out_path)
+    save_json(result, out_file)
 
 
 if __name__ == '__main__':
