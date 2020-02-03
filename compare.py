@@ -23,38 +23,44 @@ def get_precision_and_recall(truth, estimate, term):
 		true_positives / (true_positives + false_negatives)
 	)
 
-def get_percent_labeled_correctly(truth, estimate):
+def get_accuracy(truth, estimate):
 	correct = 0
-	incorrect = 0
-	for t, e in zip(truth, estimate):
+	for i, (t, e) in enumerate(zip(truth, estimate)):
 		if t == e:
 			correct += 1
-		else:
-			if t in candidates or e in candidates:
-				incorrect += 1
-	return (correct / (correct + incorrect))
+		# elif e != '':
+		# 	print("{}\t'{}'\t'{}'".format(i, t, e))
+	return correct / len(truth)
 
 truth = read_file('ground_truth_labels.txt')
-print("True Positive / (True Positive + False Negative + False Positive)")
-print("Size\tAzure\tAWS")
-for size in ['01x01', '02x02', '04x04', '04x08', '08x04', '08x08']:
+
+# Number of hours of video time an average of 2 faces per frame (rough estimate)
+# times 1200 samples per hour
+montages_per_dollar = 1000
+total_instances = 287885 * 1.5 * 1200
+print("Accuracy")
+print("Size\tAzure\tAWS\tPrice Estimate")
+for size in ['01x01', '02x02', '04x02', '02x04', '04x04', '08x04', '04x08', '08x08']:
 	azure = read_file('{}/azure_labels.txt'.format(size))
 	aws = read_file('{}/aws_labels.txt'.format(size))
-	print("{}\t{:.2f}\t{:.2f}".format(
+	faces_per_montage = int(size.split('x')[0]) * int(size.split('x')[1])
+	price_estimate = total_instances / faces_per_montage / montages_per_dollar
+	print("{}\t{:.2f}\t{:.2f}\t${:.2f}".format(
 		size,
-		get_percent_labeled_correctly(truth, azure),
-		get_percent_labeled_correctly(truth, aws)
+		get_accuracy(truth, azure),
+		get_accuracy(truth, aws),
+		price_estimate
 	))
 print()
 
-size = '04x04'
+size = '08x04'
 for estimator in ['azure', 'aws']:
 	estimate = read_file('{}/{}_labels.txt'.format(size, estimator))
-	print(estimator)
+	print(estimator.upper())
 	print("Candidate\tPrecsn\tRecall\t(n)")
 	for candidate in candidates:
 	    precision, recall = get_precision_and_recall(truth, estimate, candidate)
 	    n = sum([t == candidate for t in truth])
-	    print("{}\t{:.2f}\t{:.2f}\t{}".format(candidate[:14], precision, recall, n))
+	    print("{}\t{:.2f}\t{:.2f}\t{}".format(candidate[:10], precision, recall, n))
 	print()
 

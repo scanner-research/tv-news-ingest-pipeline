@@ -52,9 +52,9 @@ def search_aws(img_file, width, height):
             for face in resp['CelebrityFaces']:
                 name = face['Name']
                 coordinates = face['Face']['BoundingBox']
-                xcoord = int((coordinates['Left'] + coordinates['Width'] / 2) * width)
-                ycoord = int((coordinates['Top'] + coordinates['Height'] / 2) * height)
-                faces[(xcoord, ycoord)] = name
+                xcoord = (coordinates['Left'] + coordinates['Width'] / 2) * width
+                ycoord = (coordinates['Top'] + coordinates['Height'] / 2) * height
+                faces[(int(xcoord), int(ycoord))] = name
             return faces
         except Exception as e:
             print("AWS API failure", str(e))
@@ -66,8 +66,6 @@ def search_azure(img_file):
     # Image file size must be less than 4MB.
     # Docs: https://westus.dev.cognitive.microsoft.com/docs/services/56f91f2d778daf23d8ec6739/operations/56f91f2e778daf14a499e1fa
     
-    # From docs: The algorithm allows more than one face to be identified
-    # independently at the same request, but no more than 10 faces.
     img_data = read_img(img_file)
     resp = requests.post(
         AZURE_RESOURCE + 'vision/v1.0/analyze',
@@ -104,7 +102,7 @@ def search_azure(img_file):
 
 def analyze_size(width, height):
     path = "{:02d}x{:02d}/".format(width, height)
-    files = list(sorted(glob.glob(path + "*")))
+    files = list(sorted(glob.glob(path + "*.png")))
     labels = [""] * (width * height * len(files))
     for identifier, out_path in [
             (lambda file: search_aws(file, width, height), 'aws_labels.txt'),
@@ -187,5 +185,4 @@ def main(video_dir, limit):
                         cluster_id, face_id)))
 
 if __name__ == '__main__':
-    analyze_size(4, 8)
-    analyze_size(8, 4)
+    analyze_size(8, 8)
