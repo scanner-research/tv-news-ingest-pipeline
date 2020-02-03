@@ -60,16 +60,16 @@ def save_montage_results(video_name, output_path, metadata, face_crops_file):
         with open('{}/{}.json'.format(tmp_dir, i), 'w') as f:
             json.dump(meta, f)
 
-        if output_path.startswith('gs://'):
-            cmd = ['gsutil', '-m', 'cp', '-r', tmp_dir, output_path]
-            print('Copying:', cmd)
-            check_call(cmd)
-            shutil.rmtree(tmp_dir)
-        else:
-            if os.path.isdir(os.path.join(output_path, OUTDIR_MONTAGES)):
-                shutil.rmtree(os.path.join(output_path, OUTDIR_MONTAGES))
-                
-            shutil.move(tmp_dir, output_path)
+    if output_path.startswith('gs://'):
+        cmd = ['gsutil', '-m', 'cp', '-r', tmp_dir, output_path]
+        print('Copying:', cmd)
+        check_call(cmd)
+        shutil.rmtree(tmp_dir)
+    else:
+        if os.path.isdir(os.path.join(output_path, OUTDIR_MONTAGES)):
+            shutil.rmtree(os.path.join(output_path, OUTDIR_MONTAGES))
+            
+        shutil.move(tmp_dir, output_path)
 
 
 IMG_SIZE = 200

@@ -89,12 +89,15 @@ from consts import (OUTFILE_BBOXES, OUTFILE_EMBEDS, OUTFILE_BLACK_FRAMES,
                     OUTFILE_METADATA)
 from utils import get_base_name, save_json
 
+DEFAULT_PIPELINES = 24
+DEFAULT_INTERVAL = 3
 
 # Register scanner ops
 black_frames = sp.register_python_op(
     name='BlackFrames', batch=1024)(black_frames)
 crop_faces = sp.register_python_op(name='CropFaces')(crop_faces)
 dilate_bboxes = sp.register_python_op(name='DilateBboxes')(dilate_bboxes)
+
 
 
 def get_args():
@@ -111,15 +114,16 @@ def get_args():
              'incomplete results)')
     parser.add_argument('-s', '--shuffle', action='store_true',
         help='shuffle the order of the videos')
-    parser.add_argument('-p', '--pipelines', type=int, default=24)
-    parser.add_argument('--interval', type=int, default=3,
+    parser.add_argument('-p', '--pipelines', type=int,
+        default=DEFAULT_PIPELINES)
+    parser.add_argument('--interval', type=int, default=DEFAULT_INTERVAL,
         help='interval length in seconds')
 
     return parser.parse_args()
 
 
-def main(video_path, out_path, use_cloud, init_run, shuffle, pipelines,
-         interval):
+def main(video_path, out_path, use_cloud=False, init_run=False, shuffle=False,
+         pipelines=DEFAULT_PIPELINES, interval=DEFAULT_INTERVAL):
 
     init_scanner_config(use_cloud)
 

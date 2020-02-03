@@ -18,12 +18,17 @@ Input:
 
 This script creates the following outputs within the video subdirectories:
 
-    <input_dir>/
-        - <video1>/
+    input_dir/
+        - video1/
             - identities.json
-        - <video2>/
+        - video2/
             - identities.json
         ...
+
+or for single file:
+    
+    output_dir/
+        - identities.json
 
 where there is one JSON file per video containing a list of (face_id, identity)
 tuples.

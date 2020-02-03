@@ -5,6 +5,18 @@ from scannerpy.types import BboxList
 
 DILATE_AMOUNT = 1.05
 def dilate_bboxes(config, bboxes: BboxList) -> BboxList:
+    """
+    Scanner operation for changing the size of bounding boxes.
+
+    Args:
+        config: the scanner config object.
+        bboxes: a list bounding boxes found (passed in per frame)
+
+    Returns:
+        a list of the modified bounding boxes.
+
+    """
+
     return [
         protobufs.BoundingBox(
             x1=bb.x1 * (2. - DILATE_AMOUNT),
@@ -16,7 +28,7 @@ def dilate_bboxes(config, bboxes: BboxList) -> BboxList:
     ]
 
 
-def get_face_bboxes_results(detected_faces, stride):
+def get_face_bboxes_results(detected_faces, stride: int):
     assert isinstance(stride, int)
 
     result = []  # [(<face_id>, {'frame_num': <n>, 'bbox': <bbox_dict>}), ...]
