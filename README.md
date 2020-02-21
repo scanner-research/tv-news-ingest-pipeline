@@ -24,7 +24,7 @@
 
 ### Run on a Single Video
 
-To run for just a single video with path `my\_video.mp4` for example:
+To run for just a single video with path `my_video.mp4` for example:
 
 Run `python3 pipeline.py my_video.mp4 output_dir`.
 
@@ -50,7 +50,7 @@ The more common usage of the pipeline, however, is to process videos in larger
 batches. In order to do so, the scripts take as input a text file of video 
 file paths. For example:
 
-`batch\_videos.txt`:
+`batch_videos.txt`:
 ```
 path/to/my_video1.mp4
 different/path/to/my_video2.mp4
