@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
-import glob
+from multiprocessing import Pool
 import os
 
 import numpy as np
@@ -9,7 +9,7 @@ from tqdm import tqdm
 from sklearn.neighbors import KNeighborsClassifier
 
 from utils import save_json, load_json, get_base_name
-from consts import OUTFILE_GENDERS
+from consts import OUTFILE_EMBEDS, OUTFILE_GENDERS
 
 GENDER_TRAIN_X_FILE = 'gender_model/train_X.npy'
 GENDER_TRAIN_Y_FILE = 'gender_model/train_y.npy'
@@ -23,43 +23,49 @@ clf.fit(train_X, train_y)
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('input_path', type=str,
+    parser.add_argument('in_path', type=str,
                         help='file containing face embeddings')
-    parser.add_argument('output_path', type=str,
-                        help='file to output results to')
+    parser.add_argument('out_path', type=str,
+                        help='path to output directory')
+    parser.add_argument('-f', '--force', action='store_true',
+                        help='force overwrite existing output')
     return parser.parse_args()
 
 
-def main(input_path: str, output_path: str):
-    if not os.path.exists(os.path.dirname(output_path)):
-        os.makedirs(os.path.dirname(output_path))
+def main(in_path: str, out_path: str, force: bool = False):
+    # Check whether input is single or batch
+    if OUTFILE_EMBEDS in list(os.listdir(in_path)):
+        return  # TODO: implement single
+    else:
+        video_names = list(os.listdir(in_path))
+        out_paths = [os.path.join(out_path, name) for name in video_names]
+    
+    for p in out_paths:
+        if not os.path.isdir(p):
+            os.makedirs(p)
+    
+    with Pool() as workers, tqdm(
+        total=len(video_names), desc='Classifying genders', unit='video'
+    ) as pbar:
+        for video_name, output_dir in zip(video_names, out_paths):
+            embeds_path = os.path.join(in_path, video_name, OUTFILE_EMBEDS)
+            genders_outpath = os.path.join(output_dir, OUTFILE_GENDERS)
+            if force or not os.path.exists(genders_outpath):
+                workers.apply_async(
+                    process_single,
+                    args=(embeds_path, genders_outpath),
+                    callback=lambda x: pbar.update())
+            else:
+                pbar.update()
 
-    process_single(input_path, output_path)
-
-    if os.path.isdir(in_path):
-        if not os.path.exists(out_path):
-            os.makedirs(out_path)
-
-        input_files = glob.glob(os.path.join(in_path, '*_embeddings.json'))
-        for in_file in tqdm(input_files):
-            video_name = get_base_name(in_file)[:-len('_embeddings')]
-            out_file = os.path.join(out_path, video_name + '.json')
-            process_single(in_file, out_file)
-
-    #else:
-    #    # Single video case
-    #    if os.path.isdir(out_path):
-    #        out_path = os.path.join(out_path,
-    #                                get_video_name(in_path) + '.json')
-    #    process_single(in_path, out_path)
+        workers.close()
+        workers.join()
 
 
 def process_single(in_file, out_file):
     # Load the detected faces and embeddings and run the classifier
-    result = [
-        (face_id, predict_gender(embed), predict_gender_score(embed))
-        for face_id, embed in load_json(in_file)
-    ]
+    result = [(face_id, predict_gender(embed), predict_gender_score(embed))
+              for face_id, embed in load_json(in_file)]
 
     save_json(result, out_file)
 

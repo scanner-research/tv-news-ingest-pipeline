@@ -4,3 +4,4 @@ aws-credentials.csv
 docker-compose.yml
 db_name
 *.mp4
+debug/

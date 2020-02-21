@@ -36,168 +36,120 @@ tuples.
 """
 
 import argparse
-import os
+from concurrent.futures import ThreadPoolExecutor
 import json
-import glob
-import boto3
 import math
-import shutil
-import time
-from subprocess import check_call
-from PIL import Image, ImageDraw
-from tqdm import tqdm
 from multiprocessing import Pool
+import os
+from PIL import Image, ImageDraw
+import time
 
-from utils import load_json, save_json
-from consts import OUTFILE_IDENTITIES
+import tqdm
+from tqdm import tqdm
+import boto3
+
+from consts import OUTFILE_IDENTITIES, OUTDIR_CROPS
+from config import AWS_CREDENTIALS_FILE, MONTAGE_WIDTH, MONTAGE_HEIGHT
+from montage_face_images import create_montage_bytes
+from utils import get_base_name, load_json, save_json
 
 SAVE_DEBUG_IMAGES = False
-CREDENTIAL_FILE = None
 CLIENT = None
 
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('input_dir', type=str,
-        help='path to directory containing montage folders')
-    parser.add_argument('output_dir', type=str, help='path to output directory')
-    parser.add_argument('--limit', type=int)
-    parser.add_argument('--debug-dir', type=str, default='debug')
-
+    parser.add_argument('in_path', help=('path to directory for a single '
+            'video or to a directory with subdirectories for each video'))
+    parser.add_argument('out_path', help='path to output directory')
     parser.add_argument('--credential-file', type=str,
-                        default='aws-credentials.csv')
-
-    # Save debugging images with bbox overlays
-    parser.add_argument('--save-img', action='store_true')
-
-    # Max parallel requests (100+ to one region causes throttling)
-    parser.add_argument('-n', '--parallelism', type=int, default=64)
+                        default=AWS_CREDENTIALS_FILE)
+    parser.add_argument('-f', '--force', action='store_true',
+                        help='force overwrite existing output')
     return parser.parse_args()
 
 
-def main(input_dir, output_dir, debug_dir, credential_file, limit, save_img,
-         parallelism):
+def main(in_path, out_path, credential_file=AWS_CREDENTIALS_FILE, force=False):
+    # Check if input is for a batch or single video
+    if OUTDIR_CROPS in list(os.listdir(in_path)):  # single
+        return  # TODO: implement single
+    else:  # batch
+        video_names = list(os.listdir(in_path))
+        out_paths = [os.path.join(out_path, name) for name in video_names]
 
-    global SAVE_DEBUG_IMAGES, CREDENTIAL_FILE
-    SAVE_DEBUG_IMAGES = save_img
-    CREDENTIAL_FILE = credential_file
+    for p in out_paths:
+        if not os.path.isdir(p):
+            os.makedirs(p)
 
-    video_names = list(os.listdir(input_dir))
+    num_workers = min(len(video_names), 5)
+    num_threads_per_worker = 100 // num_workers  # prevent throttling
 
-    if not os.path.isdir(output_dir):
-        os.makedirs(output_dir)
-
-    with Pool(parallelism) as workers, \
-            tqdm(total=len(video_names), desc='Identifying faces') as pbar:
-        def update_pbar(x):
-            pbar.update(1)
-
-        results = []
-
-        for video_name in video_names:
-            in_path = os.path.join(input_dir, video_name, 'montages')
-            out_path = os.path.join(input_dir, video_name, OUTFILE_IDENTITIES)
-            if not os.path.exists(out_path):
-                if debug_dir:
-                    debug_path = os.path.join(debug_dir, video_name)
-                else:
-                    debug_path = None
-
-                result = workers.apply_async(
+    with Pool(num_workers) as workers, tqdm(
+        total=len(video_names), desc='Identifying faces', unit='video'
+    ) as pbar:
+        for video_name, output_dir in zip(video_names, out_paths):
+            crops_path = os.path.join(in_path, video_name, OUTDIR_CROPS)
+            identities_outpath = os.path.join(output_dir, OUTFILE_IDENTITIES)
+            if force or not os.path.exists(identities_outpath):
+                workers.apply_async(
                     process_video,
-                    args=(video_name, in_path, out_path, debug_path),
-                    callback=update_pbar)
-                results.append(result)
+                    args=(crops_path, identities_outpath,
+                          num_threads_per_worker),
+                    callback=lambda x: pbar.update())
             else:
-                update_pbar(None)
+                pbar.update()
 
-        for result in results:
-            result.get()
         workers.close()
         workers.join()
+        
 
+def process_video(crops_path, identities_outpath, max_threads=100):
+    assert os.path.isdir(crops_path)
+    
+    img_files = [img for img in sorted(os.listdir(crops_path),
+                 key=lambda x: int(get_base_name(x)))]
 
-def process_video(video_name, in_path, out_path, debug_dir):
-    if not os.path.exists(debug_dir):
-        os.makedirs(debug_dir)
-
-    remove_on_done = False
-    if in_path.startswith('gs://'):
-        try:
-            input_dir = load_from_gcs(in_path, video_name)
-        except Exception as e:
-            print('Failed:', video_name, '-', e)
-            return
-        remove_on_done = True
-    else:
-        assert os.path.isdir(in_path)
-        input_dir = in_path
-
-    img_files = [img for img in sorted(os.listdir(input_dir))
-                 if img.endswith('.png')]
-    # print('Processing video:', video_name, '({} chunks)'.format(len(img_files)))
     video_labels = []
-    for img_file in sorted(img_files, key=lambda x: int(x.split('.')[0])):
-        img_prefix = os.path.splitext(img_file)[0]
-        img_path = os.path.join(input_dir, img_file)
-        meta_path = os.path.join(input_dir, img_prefix + '.json')
-        if os.path.exists(meta_path):
-            if debug_dir:
-                debug_prefix = os.path.join(debug_dir, img_prefix)
-            else:
-                debug_prefix = None
-            group_labels = submit_image_for_labeling(
-                img_path, meta_path, debug_prefix)
-            video_labels.extend(group_labels)
-        else:
-            print('Missing metdata for:', img_path)
+    with ThreadPoolExecutor(max_threads) as executor:
+        futures = []
+        for i in range(0, len(img_files), MONTAGE_WIDTH * MONTAGE_HEIGHT):
+            img_span = img_files[i:i + MONTAGE_WIDTH * MONTAGE_HEIGHT]
+            futures.append(executor.submit(
+                submit_images_for_labeling, crops_path, img_span
+            ))
 
-    save_json(video_labels, out_path)
+    for future in futures:
+        if future.done() and not future.cancelled():
+            video_labels.extend(future.result())
 
-    if remove_on_done:
-        print('Removing:', input_dir)
-        shutil.rmtree(input_dir)
+    save_json(video_labels, identities_outpath)
 
 
-def read_img(img):
-    with open(img, 'rb') as f:
-        return f.read()
+def submit_images_for_labeling(crops_path, img_files):
+    client = load_client(AWS_CREDENTIALS_FILE)
+    img_filepaths = [os.path.join(crops_path, f) for f in img_files]
+    montage_bytes, meta = create_montage_bytes(img_filepaths)
+    img_ids = [int(get_base_name(x)) for x in img_files]
+   
+    res = search_aws(montage_bytes, client)
+    return process_labeling_results(meta['cols'], meta['block_dim'],
+                                    img_ids, res)
 
 
-def load_client(credential_file):
-    with open(credential_file) as f:
-        f.readline()
-        _, _, key_id, key_secret, _ = f.readline().split(',')
-
-    return boto3.client(
-        'rekognition', aws_access_key_id=key_id,
-        aws_secret_access_key=key_secret,
-        region_name='us-west-1')
-
-
-def search_aws(img_data):
-    global CLIENT
-    if CLIENT is None:
-        CLIENT = load_client(CREDENTIAL_FILE)
+def search_aws(img_data, client):
     # Supported image formats: JPEG, PNG, GIF, BMP.
     # Image dimensions must be at least 50 x 50.
     # Image file size must be less than 5MB.
     assert len(img_data) < 5e6, 'File too large: {}'.format(len(img_data))
     for i in range(10):
         try:
-            resp = CLIENT.recognize_celebrities(Image={'Bytes': img_data})
+            resp = client.recognize_celebrities(Image={'Bytes': img_data})
             return resp
         except Exception as e:
             delay = 2 ** i
-            print('Error (retry in {}s):'.format(delay), e)
+            tqdm.write('Error (retry in {}s): {}'.format(delay, e))
             time.sleep(delay)
     raise Exception('Too many timeouts: {}'.format(e))
-
-
-def split_list(L, n):
-    assert type(L) is list, "L is not a list"
-    for i in range(0, len(L), n):
-        yield L[i:i+n]
 
 
 def process_labeling_results(
@@ -280,54 +232,19 @@ def process_labeling_results(
             img_draw.text((grid_x * block_size, grid_y * block_size),
                           name.encode('ascii', 'ignore'), fill='red')
 
+
     return [(k, v[0], v[1]) for k, v in labels.items()]
 
 
-def submit_image_for_labeling(img_path, meta_path, debug_prefix):
-    stacked_img_data = read_img(img_path)
-    img_meta = load_json(meta_path)
-    cols = img_meta['cols']
-    block_size = img_meta['block_dim']
-    img_ids = img_meta['content']
+def load_client(credential_file):
+    with open(credential_file) as f:
+        f.readline()
+        _, _, key_id, key_secret, _ = f.readline().split(',')
 
-    if debug_prefix:
-        debug_path = debug_prefix + '.response.json'
-        if os.path.exists(debug_path):
-            with open(debug_path) as f:
-                resp = json.load(f)['response']
-        else:
-            resp = search_aws(stacked_img_data)
-            with open(debug_path, 'w') as f:
-                json.dump({
-                    'config': {
-                        'cols': cols,
-                        'image_size': block_size
-                    },
-                    'ids': img_ids,
-                    'response': resp
-                }, f)
-    else:
-        resp = search_aws(stacked_img_data)
-
-    if debug_prefix and SAVE_DEBUG_IMAGES:
-        stacked_img = Image.open(img_path)
-        stacked_img_draw = ImageDraw.Draw(stacked_img)
-    else:
-        stacked_img = None
-        stacked_img_draw = None
-
-    results = process_labeling_results(cols, block_size, img_ids, resp,
-                                       stacked_img_draw)
-
-    if stacked_img:
-        stacked_img.save(debug_prefix + '.annotated.png', optimize=True)
-    return results
-
-
-def load_from_gcs(gcs_path, video_name):
-    tmp_path = '/tmp/{}'.format(video_name)
-    check_call(['gsutil', '-q', '-m', 'cp', '-r', gcs_path, '/tmp/'])
-    return tmp_path
+    session = boto3.session.Session()
+    return session.client('rekognition', aws_access_key_id=key_id,
+                          aws_secret_access_key=key_secret,
+                          region_name='us-west-1')
 
 
 if __name__ == '__main__':
