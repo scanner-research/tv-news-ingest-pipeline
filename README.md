@@ -12,11 +12,11 @@
 
 ## Usage
 
-* Make sure videos are in the subtree from where 'docker-compose.yml' is
+* Make sure videos are in the subtree from where `docker-compose.yml` is
   contained (this is a necessary consequence of how the docker image is created).
 
 * All tv-news-ingest-pipeline scripts should be contained in same 
-  directory as 'docker-compose.yml'
+  directory as `docker-compose.yml`
 
 * Ensure you have the docker daemon running (you can specify the host if 
   different than default)
@@ -24,7 +24,7 @@
 
 ### Run on a Single Video
 
-To run for just a single video with path `my_video.mp4` for example:
+To run for just a single video with path `my\_video.mp4` for example:
 
 Run `python3 pipeline.py my_video.mp4 output_dir`.
 
@@ -50,7 +50,7 @@ The more common usage of the pipeline, however, is to process videos in larger
 batches. In order to do so, the scripts take as input a text file of video 
 file paths. For example:
 
-batch\_videos.txt:
+`batch\_videos.txt`:
 ```
 path/to/my_video1.mp4
 different/path/to/my_video2.mp4

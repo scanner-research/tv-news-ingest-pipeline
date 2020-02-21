@@ -1,0 +1,11 @@
+# Config file
+# Lines starting with '#' are comments
+
+# montage_width=10
+# montage_height=6
+# stride=3
+
+# Scanner
+# num_pipelines=8
+
+# aws_credentials_file=aws-credentials.csv
