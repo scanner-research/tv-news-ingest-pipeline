@@ -2,7 +2,7 @@
 #
 # This file will export the metadata into a format that the TV viewer can use.
 #
-# Please review: TVNEWS_VIEWER_README.md for usage instruction
+# Please review: docs/TVNEWS_VIEWER_README.md for usage instruction
 
 import argparse
 import json
