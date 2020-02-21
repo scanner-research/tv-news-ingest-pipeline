@@ -1,5 +1,42 @@
 #!/usr/bin/env python3
 
+"""
+File: classify_gender.py
+------------------------
+Script for classifying gender using face embeddings.
+
+Example #1: Single
+------------------
+
+        in_path:  my_output_dir
+        out_path: my_output_dir
+
+    where 'my_output_dir' contains 'embeddings.json'
+
+    outputs
+
+        my_output_dir/
+        └── genders.json
+
+
+Example #2: Batch
+-----------------
+
+        in_path:  my_output_dir
+        out_path: my_output_dir
+        
+    where 'my_output_dir' contains video output subdirectories
+
+    outputs 
+
+        my_output_dir/
+        ├── my_video1
+        │   └── genders.json
+        └── my_video2
+            └── genders.json
+
+"""
+
 import argparse
 from multiprocessing import Pool
 import os
@@ -8,8 +45,8 @@ import numpy as np
 from tqdm import tqdm
 from sklearn.neighbors import KNeighborsClassifier
 
-from utils import save_json, load_json, get_base_name
-from consts import OUTFILE_EMBEDS, OUTFILE_GENDERS
+from util.utils import save_json, load_json, get_base_name
+from util.consts import OUTFILE_EMBEDS, OUTFILE_GENDERS
 
 GENDER_TRAIN_X_FILE = 'gender_model/train_X.npy'
 GENDER_TRAIN_Y_FILE = 'gender_model/train_y.npy'
@@ -24,7 +61,7 @@ clf.fit(train_X, train_y)
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('in_path', type=str,
-                        help='file containing face embeddings')
+                        help='path to directory of video outputs')
     parser.add_argument('out_path', type=str,
                         help='path to output directory')
     parser.add_argument('-f', '--force', action='store_true',

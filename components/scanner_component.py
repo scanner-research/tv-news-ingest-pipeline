@@ -87,14 +87,14 @@ import scannertools.face_detection
 import scannertools.face_embedding
 from scannertools.face_embedding import FacenetEmbeddings
 
-from config import NUM_PIPELINES, STRIDE
-from consts import (OUTFILE_BBOXES, OUTFILE_EMBEDS, OUTFILE_METADATA,
-                    OUTDIR_CROPS, SCANNER_COMPONENT_OUTPUTS)
-from face_detection_and_embeddings import (dilate_bboxes, crop_faces,
+from components.face_detection_and_embeddings import (dilate_bboxes, crop_faces,
                                            get_face_bboxes_results,
                                            get_face_embeddings_results,
                                            handle_face_crops_results)
-from utils import (get_base_name, get_batch_io_paths, init_scanner_config,
+from util.config import NUM_PIPELINES, STRIDE
+from util.consts import (OUTFILE_BBOXES, OUTFILE_EMBEDS, OUTFILE_METADATA,
+                    OUTDIR_CROPS, SCANNER_COMPONENT_OUTPUTS)
+from util.utils import (get_base_name, get_batch_io_paths, init_scanner_config,
                    json_is_valid, remove_unfinished_outputs, save_json)
 
 # Suppress tensorflow warnings
@@ -172,7 +172,6 @@ def process_videos(video_paths, out_paths, init_run=False, rerun=False,
     videos = [sp.NamedVideoStream(cl, a, path=b, inplace=True)
               for a, b in zip(video_names, video_paths)]
     
-
     all_strides = [
         get_video_stride(video_name, v, interval)
         for video_name, v in zip(
@@ -194,38 +193,40 @@ def process_videos(video_paths, out_paths, init_run=False, rerun=False,
     embeddings = cl.ops.EmbedFaces(frame=strided_frames, bboxes=dilated_faces)
     face_crops = cl.ops.CropFaces(frame=strided_frames, bboxes=dilated_faces)
 
-    if 'face_detection' not in disable:
-        all_output_faces = [sp.NamedStream(cl, 'face_bboxes:' + v)
-                            for v in video_names]
-    else:
-        all_output_faces = [None] * len(video_names)
-    if 'face_embeddings' not in disable:
-        all_output_embeddings = [sp.NamedStream(cl, 'face_embeddings:' + v)
-                                 for v in video_names]
-    else:
-        all_output_embeddings = [None] * len(video_names)
+    all_outputs = []
+    output_ops = []
     if 'face_crops' not in disable:
         all_output_crops = [sp.NamedStream(cl, 'face_crops:' + v)
                             for v in video_names]
+        all_outputs.append(all_output_crops)
+        output_ops.append(cl.io.Output(face_crops, all_output_crops))
     else:
         all_output_crops = [None] * len(video_names)
+
+    if 'face_embeddings' not in disable:
+        all_output_embeddings = [sp.NamedStream(cl, 'face_embeddings:' + v)
+                                 for v in video_names]
+        all_outputs.append(all_output_embeddings)
+        output_ops.append(cl.io.Output(embeddings, all_output_embeddings))
+    else:
+        all_output_embeddings = [None] * len(video_names)
+
+    if 'face_detection' not in disable:
+        all_output_faces = [sp.NamedStream(cl, 'face_bboxes:' + v)
+                            for v in video_names]
+        all_outputs.append(all_output_faces)
+        output_ops.append(cl.io.Output(faces, all_output_faces))
+    else:
+        all_output_faces = [None] * len(video_names)
 
     if not init_run or rerun:
         remove_unfinished_outputs(
             cl, video_names,
-            [all_output_faces, all_output_embeddings, all_output_crops],
+            all_outputs,
             del_fn=lambda c, o: NamedStorage().delete(c, o),
             clean=rerun
         )
   
-    output_ops = []
-    if 'face_detection' not in disable:
-        output_ops.append(cl.io.Output(faces, all_output_faces))
-    if 'face_embeddings' not in disable:
-        output_ops.append(cl.io.Output(embeddings, all_output_embeddings))
-    if 'face_crops' not in disable:
-        output_ops.append(cl.io.Output(face_crops, all_output_crops))
-
     print('Running graph')
     cl.run(output_ops,
            sp.PerfParams.estimate(pipeline_instances_per_node=pipelines),
@@ -243,7 +244,7 @@ def process_videos(video_paths, out_paths, init_run=False, rerun=False,
         os.makedirs(tmp_dir)
     
     with Pool() as workers, tqdm(
-        total=len(video_names) * (len(SCANNER_COMPONENT_OUTPUTS) - len(disabled)),
+        total=len(video_names) * (len(SCANNER_COMPONENT_OUTPUTS) - len(disable)),
         desc='Collecting output', unit='output'
     ) as pbar:
         for (video_name, out_path, stride, meta, output_faces, 
@@ -258,7 +259,7 @@ def process_videos(video_paths, out_paths, init_run=False, rerun=False,
 
                 if output_faces is not None:
                     detected_faces = list(output_faces.load(ty=BboxList))
-                if outputs_embeddings is not None:
+                if output_embeddings is not None:
                     embedded_faces = list(
                         output_embeddings.load(ty=FacenetEmbeddings)
                     )

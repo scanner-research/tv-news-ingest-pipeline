@@ -48,10 +48,10 @@ import tqdm
 from tqdm import tqdm
 import boto3
 
-from consts import OUTFILE_IDENTITIES, OUTDIR_CROPS
-from config import AWS_CREDENTIALS_FILE, MONTAGE_WIDTH, MONTAGE_HEIGHT
-from montage_face_images import create_montage_bytes
-from utils import get_base_name, load_json, save_json
+from util.consts import OUTFILE_IDENTITIES, OUTDIR_CROPS
+from util.config import AWS_CREDENTIALS_FILE, MONTAGE_WIDTH, MONTAGE_HEIGHT
+from components.montage_face_images import create_montage_bytes
+from util.utils import get_base_name, load_json, save_json
 
 SAVE_DEBUG_IMAGES = False
 CLIENT = None
@@ -69,10 +69,26 @@ def get_args():
     return parser.parse_args()
 
 
-def main(in_path, out_path, credential_file=AWS_CREDENTIALS_FILE, force=False):
+def main(in_path, out_path, credential_file=AWS_CREDENTIALS_FILE, force=False,
+         single=False):
     # Check if input is for a batch or single video
-    if OUTDIR_CROPS in list(os.listdir(in_path)):  # single
-        return  # TODO: implement single
+    if single:  # single
+        if not os.path.isdir(out_path):
+            os.makedirs(out_path)
+
+        pbar = tqdm(total=1, desc='Identifying faces', unit='video')
+        crops_path = os.path.join(in_path, OUTDIR_CROPS)
+        if not os.path.exists(crops_path):
+            print(f'No face crops available, skipping face identification')
+            pbar.update()
+            return
+        
+        identities_outpath = os.path.join(output_idr, OUTFILE_IDENTITIES)
+        if force or not os.path.exists(identities_outpath):
+            process_video(crops_path, identities_outpath, 100)
+            pbar.update()
+
+        return
     else:  # batch
         video_names = list(os.listdir(in_path))
         out_paths = [os.path.join(out_path, name) for name in video_names]
@@ -89,6 +105,11 @@ def main(in_path, out_path, credential_file=AWS_CREDENTIALS_FILE, force=False):
     ) as pbar:
         for video_name, output_dir in zip(video_names, out_paths):
             crops_path = os.path.join(in_path, video_name, OUTDIR_CROPS)
+            if not os.path.exists(crops_path):
+                print(f'Skipping face identification for {video_name}')
+                pbar.update()
+                continue
+
             identities_outpath = os.path.join(output_dir, OUTFILE_IDENTITIES)
             if force or not os.path.exists(identities_outpath):
                 workers.apply_async(

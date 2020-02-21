@@ -61,9 +61,9 @@ from scannerpy.storage import NamedStorage
 from scannerpy.types import Histogram
 import scannertools.imgproc  # for op Histogram
 
-from config import NUM_PIPELINES
-from consts import OUTFILE_BLACK_FRAMES
-from utils import (get_base_name, get_batch_io_paths, init_scanner_config,
+from util.config import NUM_PIPELINES
+from util.consts import OUTFILE_BLACK_FRAMES
+from util.utils import (get_base_name, get_batch_io_paths, init_scanner_config,
                    json_is_valid, remove_unfinished_outputs, save_json)
 
 # Twice as manner for black frames as for face detection.

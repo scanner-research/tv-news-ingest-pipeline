@@ -19,6 +19,8 @@ script takes the video(s) through the following stages:
 
     - gender classification (classify_gender.py)
 
+    - copies captions
+
 
 Sample output directory after pipeline completion:
 
@@ -30,6 +32,7 @@ Sample output directory after pipeline completion:
     │   ├── genders.json
     │   ├── identities.json
     │   ├── metadata.json
+    │   ├── captions.srt
     │   └── crops
     │       ├── 0.png
     │       └── 1.png
@@ -48,14 +51,13 @@ import subprocess
 
 from tqdm import tqdm
 
-from docker_compose_api import (container_up, container_down, pull_container,
-                                run_command_in_container, DEFAULT_HOST,
-                                DEFAULT_SERVICE)
-import classify_gender
-import identify_faces_with_aws
-from utils import get_base_name, update_pbar
-from consts import (OUTFILE_EMBEDS, OUTFILE_GENDERS, OUTDIR_MONTAGES,
-                    OUTFILE_IDENTITIES, OUTFILE_CAPTIONS)
+from components import classify_gender, identify_faces_with_aws
+from util.consts import (OUTFILE_EMBEDS, OUTFILE_GENDERS, OUTDIR_MONTAGES,
+                         OUTFILE_IDENTITIES, OUTFILE_CAPTIONS)
+from util.docker_compose_api import (container_up, container_down,
+                                     pull_container, run_command_in_container,
+                                     DEFAULT_HOST, DEFAULT_SERVICE)
+from util.utils import get_base_name, update_pbar
 
 NAMED_COMPONENTS = [
     'face_detection',   # <
@@ -64,7 +66,8 @@ NAMED_COMPONENTS = [
     'scanner_component',
     'black_frames',
     'identities',
-    'genders'
+    'genders',
+    'captions'
 ]
 
 
@@ -102,6 +105,8 @@ def main(in_path, captions, out_path, resilient=False, host=DEFAULT_HOST,
     if disable is None:
         disable = []
 
+    single = in_path.endswith('.mp4')
+
     print(f'Creating output directories at "{out_path}"...')
     output_dirs = create_output_dirs(in_path, out_path)
 
@@ -115,12 +120,13 @@ def main(in_path, captions, out_path, resilient=False, host=DEFAULT_HOST,
                 docker_down=(not resilient), host=host, service=service)
 
     if 'identities' not in disable:
-        identify_faces_with_aws.main(out_path, out_path, force=force)
+        identify_faces_with_aws.main(out_path, out_path, force=force,
+                                     single=single)
 
     if 'genders' not in disable:
         classify_gender.main(out_path, out_path, force=force)
 
-    if captions is not None:
+    if 'captions' not in disable and captions is not None:
         copy_captions(captions, out_path)
     
 
@@ -163,7 +169,7 @@ def run_scanner_component(in_path, out_path, disable=None, init_run=False,
     if docker_up:
         prepare_docker_container(host, service)
 
-    cmd = build_scanner_component_command(in_path, out_path, init_run,
+    cmd = build_scanner_component_command(in_path, out_path, disable, init_run,
                                           force_rerun)
     run_command_in_container(cmd, host, service)
 
@@ -200,9 +206,13 @@ def prepare_docker_container(host=DEFAULT_HOST, service=DEFAULT_SERVICE):
         )
 
 
-def build_scanner_component_command(in_path, out_path, init_run=False,
-                                    force_rerun=False):
-    cmd = ['python3', 'scanner_component.py', in_path, out_path]
+def build_scanner_component_command(in_path, out_path, disable=None,
+                                    init_run=False, force_rerun=False):
+    cmd = ['python3', 'components/scanner_component.py', in_path, out_path]
+    if disable:
+        cmd.append('-d')
+        for d in disable:
+            cmd.append(d)
     if init_run:
         cmd.append('-i')
     if force_rerun:
@@ -213,7 +223,7 @@ def build_scanner_component_command(in_path, out_path, init_run=False,
 
 def build_black_frame_detection_command(in_path, out_path, init_run=False,
                                         force_rerun=False):
-    cmd = ['python3', 'black_frame_detection.py', in_path, out_path]
+    cmd = ['python3', 'components/black_frame_detection.py', in_path, out_path]
     if init_run:
         cmd.append('-i')
     if force_rerun:
@@ -224,10 +234,11 @@ def build_black_frame_detection_command(in_path, out_path, init_run=False,
 
 def copy_captions(in_path, out_dir):
     if in_path.endswith('.srt'):
+        pbar = tqdm(total=1, desc='Copying captions', unit='video')
         out_path = os.path.join(out_dir, OUTFILE_CAPTIONS)
         if not os.path.exists(out_path):
             shutil.copy(in_path, out_path)
-
+        pbar.update()
     else:
         with open(in_path, 'r') as f:
             paths = [l.strip() for l in f if l.strip()]

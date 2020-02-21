@@ -5,3 +5,4 @@ docker-compose.yml
 db_name
 *.mp4
 debug/
+*/**/__pycache__/

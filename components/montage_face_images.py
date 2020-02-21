@@ -5,9 +5,9 @@ import json
 import numpy as np
 from PIL import Image
 
-from consts import OUTDIR_MONTAGES
-from config import MONTAGE_WIDTH, MONTAGE_HEIGHT
-from utils import get_base_name
+from util.consts import OUTDIR_MONTAGES
+from util.config import MONTAGE_WIDTH, MONTAGE_HEIGHT
+from util.utils import get_base_name
 
 IMG_SIZE = 200
 BLOCK_SIZE = 250
