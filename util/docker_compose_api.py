@@ -14,25 +14,25 @@ DEFAULT_SERVICE = 'cpu'
 
 
 def start_dockerd(host=DEFAULT_HOST):
-    res = subprocess.run(f'sudo dockerd -H tcp://{host} & --log-level error',
+    res = subprocess.run('sudo dockerd -H tcp://{} & --log-level error'.format(host),
                          shell=True)
 
 
 def pull_container(host=DEFAULT_HOST, service=DEFAULT_SERVICE):
-    subprocess.run(f'DOCKER_HOST={host} docker-compose pull cpu', check=True,
-                   capture_output=True, shell=True)
+    subprocess.run('DOCKER_HOST={} docker-compose pull {}'.format(host, service),
+                   check=True, capture_output=True, shell=True)
 
 
 def container_up(host=DEFAULT_HOST, service=DEFAULT_SERVICE):
-    subprocess.run(f'DOCKER_HOST={host} docker-compose up -d {service}',
+    subprocess.run('DOCKER_HOST={} docker-compose up -d {}'.format(host, service),
                    check=True, capture_output=True, shell=True)
 
 
 def container_down(host=DEFAULT_HOST):
-    subprocess.run(f'DOCKER_HOST={host} docker-compose down', check=True,
+    subprocess.run('DOCKER_HOST={} docker-compose down'.format(host), check=True,
                    capture_output=True, shell=True)
 
 
 def run_command_in_container(cmd, host=DEFAULT_HOST, service=DEFAULT_SERVICE):
-    subprocess.run(f'DOCKER_HOST={host} docker-compose exec {service} {cmd}',
+    subprocess.run('DOCKER_HOST={} docker-compose exec {} {}'.format(host, service, cmd),
                    check=True, shell=True)
