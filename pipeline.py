@@ -107,7 +107,7 @@ def main(in_path, captions, out_path, resilient=False, host=DEFAULT_HOST,
 
     single = in_path.endswith('.mp4')
 
-    print('Creating output directories at "{out_path}"...'.format(out_path=out_path)
+    print('Creating output directories at "{out_path}"...'.format(out_path=out_path))
     output_dirs = create_output_dirs(in_path, out_path)
 
     if 'scanner_component' not in disable:
