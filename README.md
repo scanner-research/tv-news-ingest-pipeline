@@ -8,6 +8,8 @@
 
 * Install Python dependencies with `pip3 install -r requirements.txt`
 
+* Run `git submodule init && git submodule update`
+
 * Install Docker (make sure your installation comes with `dockerd`)
 
 * Setup the docker container for the Scanner dependency by following the
@@ -25,6 +27,10 @@
 * Ensure you have the docker daemon running (you can specify the host if 
   different than default)
 
+### Notes for use with TV-News Viewer
+
+* All video files must use the following naming convention:
+`CHANNEL_YYYYMMDD_hhmmss_SHOW.mp4`
 
 ### Run on a Single Video
 
