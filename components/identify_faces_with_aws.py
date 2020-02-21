@@ -3,32 +3,38 @@
 """
 File: identify_faces_with_aws.py
 --------------------------------
-Identifies faces from face montages through AWS.
+Script for identifying faces from face crops through AWS.
 
-Input:
+Example #1: Single
+------------------
 
-    - Path to directory containing one subdirectory per video:
-    
-      "path/to/<input_dir>" where <input_dir> looks like
+        in_path:  my_output_dir
+        out_path: my_output_dir
 
-        <input_dir>/
-            - <video1>/
-            - <video2>/
-            ...
+    where 'my_output_dir' contains 'crops' directory of face crop images.
 
-This script creates the following outputs within the video subdirectories:
+    outputs
 
-    input_dir/
-        - video1/
-            - identities.json
-        - video2/
-            - identities.json
-        ...
+        my_output_dir/
+        └── identities.json
 
-or for single file:
-    
-    output_dir/
-        - identities.json
+
+Example #2: Batch
+-----------------
+
+        in_path:  my_output_dir
+        out_path: my_output_dir
+        
+    where 'my_output_dir' contains video output subdirectories (which in turn 
+    contain their own 'crops' directories)
+
+    outputs 
+
+        my_output_dir/
+        ├── my_video1
+        │   └── identities.json
+        └── my_video2
+            └── identities.json
 
 where there is one JSON file per video containing a list of (face_id, identity)
 tuples.
@@ -83,7 +89,7 @@ def main(in_path, out_path, credential_file=AWS_CREDENTIALS_FILE, force=False,
             pbar.update()
             return
         
-        identities_outpath = os.path.join(output_idr, OUTFILE_IDENTITIES)
+        identities_outpath = os.path.join(out_path, OUTFILE_IDENTITIES)
         if force or not os.path.exists(identities_outpath):
             process_video(crops_path, identities_outpath, 100)
             pbar.update()

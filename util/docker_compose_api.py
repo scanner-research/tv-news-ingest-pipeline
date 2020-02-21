@@ -20,17 +20,17 @@ def start_dockerd(host=DEFAULT_HOST):
 
 def pull_container(host=DEFAULT_HOST, service=DEFAULT_SERVICE):
     subprocess.run('DOCKER_HOST={} docker-compose pull {}'.format(host, service),
-                   check=True, capture_output=True, shell=True)
+                   check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
 
 
 def container_up(host=DEFAULT_HOST, service=DEFAULT_SERVICE):
     subprocess.run('DOCKER_HOST={} docker-compose up -d {}'.format(host, service),
-                   check=True, capture_output=True, shell=True)
+                   check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
 
 
 def container_down(host=DEFAULT_HOST):
     subprocess.run('DOCKER_HOST={} docker-compose down'.format(host), check=True,
-                   capture_output=True, shell=True)
+                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
 
 
 def run_command_in_container(cmd, host=DEFAULT_HOST, service=DEFAULT_SERVICE):

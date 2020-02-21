@@ -2,13 +2,17 @@
 
 ## Getting Started
 
+* Requires Python 3.5 or up
+
 * Pull this repository
 
 * Install Python dependencies with `pip3 install -r requirements.txt`
 
+* Install Docker (make sure your installation comes with `dockerd`)
+
 * Setup the docker container for the Scanner dependency by following the
   instructions at http://scanner.run/guide/quickstart.html#quickstart (download 
-  the `docker-compose.yml` file to the same directory as this repo).
+  the `docker-compose.yml` file to the same directory as this repo)
 
 ## Usage
 
@@ -153,3 +157,4 @@ there are several other useful options or flags, all of which can be listed with
 
 Further options can be configured in the `config` file. A sample is provided in 
 this repository.
+

@@ -3,6 +3,7 @@
 """
 File: config.py
 ---------------
+Contains config variables for the pipeline, read from the 'config' file.
 
 """
 

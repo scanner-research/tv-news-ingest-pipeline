@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 """
 File: face_detection_and_embeddings.py
 --------------------------------------

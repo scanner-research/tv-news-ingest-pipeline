@@ -1,7 +1,9 @@
+#!/usr/bin/env python3
+
 """
 File: utils.py
 --------------
-Contains utility functions used across the pipeline.
+Contains general functions used across multiple parts of the pipeline.
 
 """
 

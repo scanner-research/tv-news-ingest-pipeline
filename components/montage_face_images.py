@@ -1,3 +1,13 @@
+#!/usr/bin/env python3
+
+"""
+File: montage_face_images.py
+----------------------------
+This module contains functions for creating montages of face crop images to 
+be sent to face identification services (like AWS).
+
+"""
+
 import cv2
 import io
 import json
