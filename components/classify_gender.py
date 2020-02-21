@@ -66,13 +66,30 @@ def get_args():
                         help='path to output directory')
     parser.add_argument('-f', '--force', action='store_true',
                         help='force overwrite existing output')
+    parser.add_argument('-s', '--single', action='store_true', 
+                        help='single video (as opposed to batch)')
     return parser.parse_args()
 
 
-def main(in_path: str, out_path: str, force: bool = False):
+def main(in_path, out_path, force=False, single=False):
     # Check whether input is single or batch
-    if OUTFILE_EMBEDS in list(os.listdir(in_path)):
-        return  # TODO: implement single
+    if single:
+        if not os.path.isdir(out_path):
+            os.makedirs(out_path)
+
+        pbar = tqdm(total=1, desc='Classifying genders', unit='video')
+        embeds_path = os.path.join(in_path, OUTFILE_EMBEDS)
+        if not os.path.exists(embeds_path):
+            print('No face embeddings available, skipping gender classification')
+            pbar.update()
+            return
+
+        genders_outpath = os.path.join(out_path, OUTFILE_GENDERS)
+        if force or not os.path.exists(genders_outpath):
+            process_single(embeds_path, genders_outpath)
+        
+        pbar.update()
+        return
     else:
         video_names = list(os.listdir(in_path))
         out_paths = [os.path.join(out_path, name) for name in video_names]

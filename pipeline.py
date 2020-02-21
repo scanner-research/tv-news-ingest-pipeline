@@ -124,7 +124,7 @@ def main(in_path, captions, out_path, resilient=False, host=DEFAULT_HOST,
                                      single=single)
 
     if 'genders' not in disable:
-        classify_gender.main(out_path, out_path, force=force)
+        classify_gender.main(out_path, out_path, force=force, single=single)
 
     if 'captions' not in disable and captions is not None:
         copy_captions(captions, out_path)
@@ -210,9 +210,13 @@ def build_scanner_component_command(in_path, out_path, disable=None,
                                     init_run=False, force_rerun=False):
     cmd = ['python3', 'components/scanner_component.py', in_path, out_path]
     if disable:
-        cmd.append('-d')
-        for d in disable:
-            cmd.append(d)
+        scanner_parts = [x for x in disable
+                if x in ['face_detection', 'face_embeddings', 'face_crops']]
+        if scanner_parts:
+            cmd.append('-d')
+            for d in scanner_parts:
+                cmd.append(d)
+
     if init_run:
         cmd.append('-i')
     if force_rerun:

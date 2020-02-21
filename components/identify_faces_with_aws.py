@@ -72,6 +72,8 @@ def get_args():
                         default=AWS_CREDENTIALS_FILE)
     parser.add_argument('-f', '--force', action='store_true',
                         help='force overwrite existing output')
+    parser.add_argument('-s', '--single', action='store_true',
+                        help='single video (as opposed to batch)')
     return parser.parse_args()
 
 
@@ -92,8 +94,8 @@ def main(in_path, out_path, credential_file=AWS_CREDENTIALS_FILE, force=False,
         identities_outpath = os.path.join(out_path, OUTFILE_IDENTITIES)
         if force or not os.path.exists(identities_outpath):
             process_video(crops_path, identities_outpath, 100)
-            pbar.update()
-
+        
+        pbar.update()
         return
     else:  # batch
         video_names = list(os.listdir(in_path))
