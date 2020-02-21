@@ -107,7 +107,7 @@ def main(in_path, captions, out_path, resilient=False, host=DEFAULT_HOST,
 
     single = in_path.endswith('.mp4')
 
-    print(f'Creating output directories at "{out_path}"...')
+    print('Creating output directories at "{out_path}"...'.format(out_path=out_path)
     output_dirs = create_output_dirs(in_path, out_path)
 
     if 'scanner_component' not in disable:
@@ -200,9 +200,9 @@ def prepare_docker_container(host=DEFAULT_HOST, service=DEFAULT_SERVICE):
         container_up(host, service)
     except subprocess.CalledProcessError as err:
         raise PipelineException(
-            f'Could not connect to docker daemon at http://{host}.'
-             'Try running to following command: '
-            f'`sudo dockerd -H tcp://{host} --log-level error &`'
+            ('Could not connect to docker daemon at http://{host}.'
+            'Try running to following command: '
+            '`sudo dockerd -H tcp://{host} --log-level error &`').format(host=host)
         )
 
 

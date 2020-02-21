@@ -79,7 +79,7 @@ def main(in_path, out_path, credential_file=AWS_CREDENTIALS_FILE, force=False,
         pbar = tqdm(total=1, desc='Identifying faces', unit='video')
         crops_path = os.path.join(in_path, OUTDIR_CROPS)
         if not os.path.exists(crops_path):
-            print(f'No face crops available, skipping face identification')
+            print('No face crops available, skipping face identification')
             pbar.update()
             return
         
@@ -106,7 +106,7 @@ def main(in_path, out_path, credential_file=AWS_CREDENTIALS_FILE, force=False,
         for video_name, output_dir in zip(video_names, out_paths):
             crops_path = os.path.join(in_path, video_name, OUTDIR_CROPS)
             if not os.path.exists(crops_path):
-                print(f'Skipping face identification for {video_name}')
+                print('Skipping face identification for {}'.format(video_name))
                 pbar.update()
                 continue
 

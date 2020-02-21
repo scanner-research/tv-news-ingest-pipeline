@@ -32,15 +32,15 @@ This will produce the following output:
 
 ```
 output_dir/
-    ├── bboxes.json
-    ├── black_frames.json
-    ├── embeddings.json
-    ├── genders.json
-    ├── identities.json
-    ├── metadata.json
-    └── crops
-        ├── 0.png
-        └── ...
+├── bboxes.json
+├── black_frames.json
+├── embeddings.json
+├── genders.json
+├── identities.json
+├── metadata.json
+└── crops
+    ├── 0.png
+    └── ...
 
 ```
 
