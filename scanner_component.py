@@ -100,6 +100,11 @@ from utils import (get_base_name, get_batch_io_paths, init_scanner_config,
 # Suppress tensorflow warnings
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
+NAMED_COMPONENTS = [
+    'face_detection',
+    'face_embeddings',
+    'face_crops'
+]
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -114,11 +119,13 @@ def get_args():
                         help='number of pipelines for scanner')
     parser.add_argument('--interval', type=int, default=STRIDE,
                         help='interval length in seconds')
+    parser.add_argument('-d', '--disable', nargs='+', choices=NAMED_COMPONENTS,
+                        help='list of named components to disable')
     return parser.parse_args()
 
 
 def main(in_path, out_path, init_run=False, force_rerun=False, 
-        pipelines=NUM_PIPELINES, interval=STRIDE):
+        pipelines=NUM_PIPELINES, interval=STRIDE, disable=None):
 
     init_scanner_config()
 
@@ -129,24 +136,30 @@ def main(in_path, out_path, init_run=False, force_rerun=False,
         out_paths = [out_path]
 
     process_videos(video_paths, out_paths, init_run, force_rerun, pipelines, 
-                   interval)
+                   interval, disable)
 
 
 def process_videos(video_paths, out_paths, init_run=False, rerun=False,
-                   pipelines=NUM_PIPELINES, interval=STRIDE):
+                   pipelines=NUM_PIPELINES, interval=STRIDE, disable=None):
 
     assert len(video_paths) == len(out_paths), ('Mismatch between video and '
                                                 'output paths')
+
+    if disable is None:
+        disable = []
 
     cl = sp.Client(enable_watchdog=False)
 
     video_names = [get_base_name(vid) for vid in video_paths]
     if not init_run and not rerun:
         for i in range(len(video_names) - 1, -1, -1):
-            if (json_is_valid(os.path.join(out_paths[i], OUTFILE_BBOXES))
-                and json_is_valid(os.path.join(out_paths[i], OUTFILE_EMBEDS))
+            if (('face_detection' in disable
+                or json_is_valid(os.path.join(out_paths[i], OUTFILE_BBOXES)))
+                and ('face_embeddings' in disable
+                    or json_is_valid(os.path.join(out_paths[i], OUTFILE_EMBEDS)))
                 and json_is_valid(os.path.join(out_paths[i], OUTFILE_METADATA))
-                and os.path.isdir(os.path.join(out_paths[i], OUTDIR_CROPS))
+                and ('face_crops' in disable
+                    or os.path.isdir(os.path.join(out_paths[i], OUTDIR_CROPS)))
             ):
                 video_names.pop(i)
                 out_paths.pop(i)
@@ -181,12 +194,21 @@ def process_videos(video_paths, out_paths, init_run=False, rerun=False,
     embeddings = cl.ops.EmbedFaces(frame=strided_frames, bboxes=dilated_faces)
     face_crops = cl.ops.CropFaces(frame=strided_frames, bboxes=dilated_faces)
 
-    all_output_faces = [sp.NamedStream(cl, 'face_bboxes:' + v)
-                        for v in video_names]
-    all_output_embeddings = [sp.NamedStream(cl, 'face_embeddings:' + v)
-                             for v in video_names]
-    all_output_crops = [sp.NamedStream(cl, 'face_crops:' + v)
-                        for v in video_names]
+    if 'face_detection' not in disable:
+        all_output_faces = [sp.NamedStream(cl, 'face_bboxes:' + v)
+                            for v in video_names]
+    else:
+        all_output_faces = [None] * len(video_names)
+    if 'face_embeddings' not in disable:
+        all_output_embeddings = [sp.NamedStream(cl, 'face_embeddings:' + v)
+                                 for v in video_names]
+    else:
+        all_output_embeddings = [None] * len(video_names)
+    if 'face_crops' not in disable:
+        all_output_crops = [sp.NamedStream(cl, 'face_crops:' + v)
+                            for v in video_names]
+    else:
+        all_output_crops = [None] * len(video_names)
 
     if not init_run or rerun:
         remove_unfinished_outputs(
@@ -195,13 +217,17 @@ def process_videos(video_paths, out_paths, init_run=False, rerun=False,
             del_fn=lambda c, o: NamedStorage().delete(c, o),
             clean=rerun
         )
-   
-    output_op_faces = cl.io.Output(faces, all_output_faces)
-    output_op_embeddings = cl.io.Output(embeddings, all_output_embeddings)
-    output_op_crops = cl.io.Output(face_crops, all_output_crops)
+  
+    output_ops = []
+    if 'face_detection' not in disable:
+        output_ops.append(cl.io.Output(faces, all_output_faces))
+    if 'face_embeddings' not in disable:
+        output_ops.append(cl.io.Output(embeddings, all_output_embeddings))
+    if 'face_crops' not in disable:
+        output_ops.append(cl.io.Output(face_crops, all_output_crops))
 
     print('Running graph')
-    cl.run([output_op_crops, output_op_embeddings, output_op_faces],
+    cl.run(output_ops,
            sp.PerfParams.estimate(pipeline_instances_per_node=pipelines),
            cache_mode=sp.CacheMode.Ignore)
   
@@ -215,9 +241,9 @@ def process_videos(video_paths, out_paths, init_run=False, rerun=False,
     tmp_dir = '/tmp/face_crops'
     if not os.path.exists(tmp_dir):
         os.makedirs(tmp_dir)
-
+    
     with Pool() as workers, tqdm(
-        total=len(video_names) * len(SCANNER_COMPONENT_OUTPUTS),
+        total=len(video_names) * (len(SCANNER_COMPONENT_OUTPUTS) - len(disabled)),
         desc='Collecting output', unit='output'
     ) as pbar:
         for (video_name, out_path, stride, meta, output_faces, 
@@ -225,16 +251,19 @@ def process_videos(video_paths, out_paths, init_run=False, rerun=False,
                 video_names, out_paths, all_strides, all_metadata, 
                 all_output_faces, all_output_embeddings, all_output_crops
         ):
-            if all(out.committed() for out in 
+            if all(out is None or out.committed() for out in 
                    [output_faces, output_embeddings, output_crops]):
                 if not os.path.isdir(out_path):
                     os.makedirs(out_path)
 
-                detected_faces = list(output_faces.load(ty=BboxList))
-                embedded_faces = list(
-                    output_embeddings.load(ty=FacenetEmbeddings)
-                )
-                cropped_faces = list(output_crops.load())
+                if output_faces is not None:
+                    detected_faces = list(output_faces.load(ty=BboxList))
+                if outputs_embeddings is not None:
+                    embedded_faces = list(
+                        output_embeddings.load(ty=FacenetEmbeddings)
+                    )
+                if output_crops is not None:
+                    cropped_faces = list(output_crops.load())
 
                 # Save metadata
                 metadata_outpath = os.path.join(out_path, OUTFILE_METADATA)
@@ -242,35 +271,38 @@ def process_videos(video_paths, out_paths, init_run=False, rerun=False,
                 pbar.update()
                 
                 # Save bboxes
-                bbox_outpath = os.path.join(out_path, OUTFILE_BBOXES)
-                callback = partial(callback_fn, path=bbox_outpath,
-                                   save_fn=save_json, pbar=pbar)
-                workers.apply_async(
-                    get_face_bboxes_results,
-                    args=(detected_faces, stride),
-                    callback=partial(callback_fn, path=bbox_outpath,
-                                     save_fn=save_json, pbar=pbar)
-                )
+                if output_faces is not None:
+                    bbox_outpath = os.path.join(out_path, OUTFILE_BBOXES)
+                    callback = partial(callback_fn, path=bbox_outpath,
+                                       save_fn=save_json, pbar=pbar)
+                    workers.apply_async(
+                        get_face_bboxes_results,
+                        args=(detected_faces, stride),
+                        callback=partial(callback_fn, path=bbox_outpath,
+                                         save_fn=save_json, pbar=pbar)
+                    )
 
                 # Save embeddings
-                embed_outpath = os.path.join(out_path, OUTFILE_EMBEDS)
-                workers.apply_async(
-                    get_face_embeddings_results,
-                    args=(embedded_faces,),
-                    callback=partial(callback_fn, path=embed_outpath,
-                                     save_fn=save_json, pbar=pbar)
-                )
+                if output_embeddings is not None:
+                    embed_outpath = os.path.join(out_path, OUTFILE_EMBEDS)
+                    workers.apply_async(
+                        get_face_embeddings_results,
+                        args=(embedded_faces,),
+                        callback=partial(callback_fn, path=embed_outpath,
+                                         save_fn=save_json, pbar=pbar)
+                    )
 
                 # Save crops
-                tmp_path = os.path.join(tmp_dir, '{}.pkl'.format(video_name))
-                with open(tmp_path, 'wb') as f:
-                    pickle.dump(cropped_faces, f)
-                crops_outpath = os.path.join(out_path, OUTDIR_CROPS)
-                result = workers.apply_async(
-                    handle_face_crops_results, 
-                    args=(tmp_path, crops_outpath),
-                    callback=partial(callback_fn, pbar=pbar)
-                )
+                if output_crops is not None:
+                    tmp_path = os.path.join(tmp_dir, '{}.pkl'.format(video_name))
+                    with open(tmp_path, 'wb') as f:
+                        pickle.dump(cropped_faces, f)
+                    crops_outpath = os.path.join(out_path, OUTDIR_CROPS)
+                    result = workers.apply_async(
+                        handle_face_crops_results, 
+                        args=(tmp_path, crops_outpath),
+                        callback=partial(callback_fn, pbar=pbar)
+                    )
                 
             else:
                 tqdm.write(('Missing results for {}: faces={}, embs={}, '

@@ -3,7 +3,7 @@
 """
 File: pipeline.py
 -----------------
-This script is the interface to the TVNews video processing pipeline.
+This script is the interface to the TV-News video processing pipeline.
 
 Given a video filepath or textfile containing a list of video filepaths, this 
 script takes the video(s) through the following stages:
@@ -30,19 +30,20 @@ Sample output directory after pipeline completion:
     │   ├── genders.json
     │   ├── identities.json
     │   ├── metadata.json
-    │   └── montages
-    │       ├── 0.json
-    │       └── 0.png
+    │   └── crops
+    │       ├── 0.png
+    │       └── 1.png
     ├── video_name2
     │   └── ...
     └── ... 
 
 """
-import time
+
 import argparse
 import glob
 from multiprocessing import Pool
 import os
+import shutil
 import subprocess
 
 from tqdm import tqdm
@@ -54,7 +55,7 @@ import classify_gender
 import identify_faces_with_aws
 from utils import get_base_name, update_pbar
 from consts import (OUTFILE_EMBEDS, OUTFILE_GENDERS, OUTDIR_MONTAGES,
-                    OUTFILE_IDENTITIES, SCANNER_COMPONENT_OUTPUTS)
+                    OUTFILE_IDENTITIES, OUTFILE_CAPTIONS)
 
 NAMED_COMPONENTS = [
     'face_detection',   # <
@@ -66,13 +67,17 @@ NAMED_COMPONENTS = [
     'genders'
 ]
 
+
 class PipelineException(Exception):
     pass
+
 
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('in_path', help=('path to mp4 or to a text file '
                                          'containing video filepaths'))
+    parser.add_argument('--captions', help=('path to srt or to a text file '
+                                            'containing srt filepaths'))
     parser.add_argument('out_path', help='path to output directory')
     parser.add_argument('-r', '--resilient', action='store_true',
                         help='leave docker container up after execution')
@@ -90,7 +95,7 @@ def get_args():
     return parser.parse_args()
 
 
-def main(in_path, out_path, resilient=False, host=DEFAULT_HOST,
+def main(in_path, captions, out_path, resilient=False, host=DEFAULT_HOST,
          service=DEFAULT_SERVICE, init_run=False, force=False,
          disable=None):
 
@@ -101,32 +106,23 @@ def main(in_path, out_path, resilient=False, host=DEFAULT_HOST,
     output_dirs = create_output_dirs(in_path, out_path)
 
     if 'scanner_component' not in disable:
-        start = time.time()
         run_scanner_component(in_path, out_path, disable, init_run, force,
                               host=host, service=service)
-        end = time.time()
-        print(f'took {end - start} seconds to run scanner component')
   
     if 'black_frames' not in disable:
-        start = time.time()
         run_black_frame_detection(in_path, out_path, init_run, force,
                 docker_up=('scanner_component' in disable),
                 docker_down=(not resilient), host=host, service=service)
-        end = time.time()
-        print(f'took {end - start} seconds to run black frame')
 
     if 'identities' not in disable:
-        start = time.time()
         identify_faces_with_aws.main(out_path, out_path, force=force)
-        end = time.time()
-        print(f'took {end - start} seconds to identify')
 
     if 'genders' not in disable:
-        start = time.time()
         classify_gender.main(out_path, out_path, force=force)
-        end = time.time()
-        print(f'took {end - start} seconds to classify')
 
+    if captions is not None:
+        copy_captions(captions, out_path)
+    
 
 def create_output_dirs(video_path: str, output_path: str) -> list:
     """
@@ -226,21 +222,23 @@ def build_black_frame_detection_command(in_path, out_path, init_run=False,
     return ' '.join(cmd)
 
 
-def verify_scanner_component_output(output_paths: list) -> bool:
-    """
-    Verifies whether all expected outputs of the scanner component are present.
+def copy_captions(in_path, out_dir):
+    if in_path.endswith('.srt'):
+        out_path = os.path.join(out_dir, OUTFILE_CAPTIONS)
+        if not os.path.exists(out_path):
+            shutil.copy(in_path, out_path)
 
-    Args:
-        output_paths: the list of output directory paths.
-
-    Returns:
-        True if all expected outputs are present, False otherwise.
-
-    """
-    
-    return all(os.path.exists(os.path.join(path, expected))
-               for path in output_paths
-               for expected in SCANNER_COMPONENT_OUTPUTS)
+    else:
+        with open(in_path, 'r') as f:
+            paths = [l.strip() for l in f if l.strip()]
+        video_names = [get_base_name(p) for p in paths]
+        out_paths = [os.path.join(out_dir, v, OUTFILE_CAPTIONS)
+                     for v in video_names]
+        for captions, out_path in zip(
+            tqdm(paths, desc='Copying captions', unit='video'), out_paths
+        ):
+            if not os.path.exists(out_path):
+                shutil.copy(captions, out_path)
 
 
 if __name__ == '__main__':

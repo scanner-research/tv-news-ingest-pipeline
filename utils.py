@@ -96,10 +96,9 @@ def remove_unfinished_outputs(cl, video_names, all_outputs, del_fn, clean=False)
     for collection in zip(video_names, *all_outputs):
         video_name = collection[0]
         outputs = collection[1:]
-        commits = [out.committed() for out in outputs]
 
-        if clean or not all(out.committed() for out in outputs):
-            del_fn(cl, outputs)
+        if clean or not all(out is None or out.committed() for out in outputs):
+            del_fn(cl, list(filter(lambda x: x, outputs)))
         else:
             print('Using cached results for', video_name)
 
