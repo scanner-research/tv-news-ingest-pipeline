@@ -4,7 +4,7 @@
 
 * Requires Python 3.5 or up
 
-* Pull this repository
+* Clone this repository
 
 * Install Python dependencies with `pip3 install -r requirements.txt`
 
