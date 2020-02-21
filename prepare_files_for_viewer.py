@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 #
 # This file will export the metadata into a format that the TV viewer can use.
+#
+# Please review: TVNEWS_VIEWER_README.md for usage instruction
 
 import argparse
 import json
