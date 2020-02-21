@@ -36,22 +36,22 @@ def main(input_path: str, output_path: str):
 
     process_single(input_path, output_path)
 
-    if os.path.isdir(in_path):
-        if not os.path.exists(out_path):
-            os.makedirs(out_path)
+    if os.path.isdir(input_path):
+        if not os.path.exists(output_path):
+            os.makedirs(output_path)
 
-        input_files = glob.glob(os.path.join(in_path, '*_embeddings.json'))
+        input_files = glob.glob(os.path.join(input_path, '*_embeddings.json'))
         for in_file in tqdm(input_files):
             video_name = get_base_name(in_file)[:-len('_embeddings')]
-            out_file = os.path.join(out_path, video_name + '.json')
+            out_file = os.path.join(output_path, video_name + '.json')
             process_single(in_file, out_file)
 
     #else:
     #    # Single video case
-    #    if os.path.isdir(out_path):
-    #        out_path = os.path.join(out_path,
-    #                                get_video_name(in_path) + '.json')
-    #    process_single(in_path, out_path)
+    #    if os.path.isdir(output_path):
+    #        output_path = os.path.join(output_path,
+    #                                get_video_name(input_path) + '.json')
+    #    process_single(input_path, output_path)
 
 
 def process_single(in_file, out_file):
