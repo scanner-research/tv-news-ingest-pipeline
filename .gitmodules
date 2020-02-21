@@ -1,0 +1,3 @@
+[submodule "deps/caption-index"]
+	path = deps/caption-index
+	url = https://github.com/scanner-research/caption-index.git
