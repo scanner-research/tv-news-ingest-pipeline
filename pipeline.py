@@ -95,12 +95,14 @@ def get_args():
                         help='force rerun for all videos')
     parser.add_argument('-d', '--disable', nargs='+', choices=NAMED_COMPONENTS,
                         help='list of named components to disable')
+    parser.add_argument('-s', '--script', choices=NAMED_COMPONENTS[3:],
+                        help='run a single component of the pipeline as a script')
     return parser.parse_args()
 
 
 def main(in_path, captions, out_path, resilient=False, host=DEFAULT_HOST,
          service=DEFAULT_SERVICE, init_run=False, force=False,
-         disable=None):
+         disable=None, script=None):
 
     if disable is None:
         disable = []
@@ -110,23 +112,29 @@ def main(in_path, captions, out_path, resilient=False, host=DEFAULT_HOST,
     print('Creating output directories at "{out_path}"...'.format(out_path=out_path))
     output_dirs = create_output_dirs(in_path, out_path)
 
-    if 'scanner_component' not in disable:
+    if (script and script == 'scanner_component') \
+            or (not script and 'scanner_component' not in disable):
         run_scanner_component(in_path, out_path, disable, init_run, force,
                               host=host, service=service)
   
-    if 'black_frames' not in disable:
+    if (script and script == 'black_frames') \
+            or (not script and 'black_frames' not in disable):
         run_black_frame_detection(in_path, out_path, init_run, force,
                 docker_up=('scanner_component' in disable),
                 docker_down=(not resilient), host=host, service=service)
 
-    if 'identities' not in disable:
+    if (script and script == 'identities') \
+            or (not script and 'identities' not in disable):
         identify_faces_with_aws.main(out_path, out_path, force=force,
                                      single=single)
 
-    if 'genders' not in disable:
+    if (script and script == 'genders') or \
+            (not script and 'genders' not in disable):
         classify_gender.main(out_path, out_path, force=force, single=single)
 
-    if 'captions' not in disable and captions is not None:
+
+    if captions is not None and ((script and script == 'captions')
+                                 or (not script and 'captions' not in disable)):
         copy_captions(captions, out_path)
     
 

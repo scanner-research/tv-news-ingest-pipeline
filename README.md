@@ -90,7 +90,23 @@ output_dir/
     └── metadata.json
 ```
 
-### Adding Captions
+### Run an Individual Script
+
+If you want to run any of the pipeline components as individual scripts, use the 
+`-s, --script` option. For instance, if you want to run just the scanner component, 
+
+run `python3 pipeline.py batch.txt output_dir --script=scanner_component`,
+
+or if you want to run just the gender classification,
+
+run `python3 pipeline.py batch.txt output_dir --script=genders`.
+
+Note, however, that you are responsible for making sure the requisite inputs 
+exist for the component you would like to run (`embeddings.json` for the gender 
+classifier, for example).
+
+
+### Using Captions
 
 Captions can be specified with the `--captions` option either as a single path to the `.srt` file or as a 
 batch text file just as with videos. Make sure that the filename format of 
