@@ -22,7 +22,7 @@ The usage of the pipeline will be explained further in the coming sections, but 
    
 ## Getting Started
 
-Note: the TV News pipeline is only supported on Linux (and, most importantly, tested).
+Note: the TV News pipeline is only supported (and, most importantly, tested) on Linux.
 
 1. Install Python3 (requires Python 3.5 or up)
 
