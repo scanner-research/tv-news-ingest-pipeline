@@ -32,6 +32,8 @@
 * All video files must use the following naming convention:
 `CHANNEL_YYYYMMDD_hhmmss_SHOW.mp4`
 
+For example, `FOXNEWS_20180513_193000_The_Kelly_File.mp4`
+
 ### Run on a Single Video
 
 To run for just a single video with path `my_video.mp4` for example:
@@ -42,13 +44,13 @@ This will produce the following output:
 
 ```
 output_dir/
-├── bboxes.json
-├── black_frames.json
-├── embeddings.json
-├── genders.json
-├── identities.json
-├── metadata.json
-└── crops
+├── bboxes.json         # bounding boxes per face
+├── black_frames.json   # black frame locations
+├── embeddings.json     # FaceNet embeddings for each face
+├── genders.json        # male/female gender per face
+├── identities.json     # celebrity identity per face
+├── metadata.json       # number of frames, fps, name, width, height
+└── crops               # cropped images of each face
     ├── 0.png
     └── ...
 
@@ -75,15 +77,15 @@ This will produce the following output:
 ```
 output_dir/
 ├── my_video1
-│   ├── bboxes.json
-│   ├── black_frames.json
-│   ├── crops
+│   ├── bboxes.json        
+│   ├── black_frames.json  
+│   ├── crops              
 │   │   ├── 0.png
 │   │   └── ...
-│   ├── embeddings.json
-│   ├── genders.json
-│   ├── identities.json
-│   └── metadata.json
+│   ├── embeddings.json    
+│   ├── genders.json       
+│   ├── identities.json    
+│   └── metadata.json  
 └── my_video2
     ├── bboxes.json
     ├── black_frames.json
@@ -150,7 +152,7 @@ Currently, the components that can be disabled are:
 
 If you wanted to skip extracting face crops, for instance, you would run 
 
-`python3 pipeline.py batch_videos.txt outputdir --disable face_crops`.
+`python3 pipeline.py batch_videos.txt outputdir --disable face_crops black_frames`.
 
 In this case, identifying faces with AWS will still be attempted, but will skip 
 after finding that there are no face crops available.

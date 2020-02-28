@@ -90,9 +90,9 @@ def main(in_path, out_path, force=False, single=False):
         
         pbar.update()
         return
-    else:
-        video_names = list(os.listdir(in_path))
-        out_paths = [os.path.join(out_path, name) for name in video_names]
+
+    video_names = list(os.listdir(in_path))
+    out_paths = [os.path.join(out_path, name) for name in video_names]
     
     for p in out_paths:
         if not os.path.isdir(p):

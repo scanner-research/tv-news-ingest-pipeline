@@ -9,3 +9,4 @@ tqdm
 internetarchive
 docker-compose
 opencv-python-headless
+pysrt

@@ -51,7 +51,8 @@ import subprocess
 
 from tqdm import tqdm
 
-from components import classify_gender, identify_faces_with_aws
+from components import (classify_gender, identify_faces_with_aws,
+                        identity_propogation)
 from util.consts import (OUTFILE_EMBEDS, OUTFILE_GENDERS, OUTDIR_MONTAGES,
                          OUTFILE_IDENTITIES, OUTFILE_CAPTIONS)
 from util.docker_compose_api import (container_up, container_down,
@@ -66,6 +67,7 @@ NAMED_COMPONENTS = [
     'scanner_component',
     'black_frames',
     'identities',
+    'identity_propogation',
     'genders',
     'captions'
 ]
@@ -109,7 +111,7 @@ def main(in_path, captions, out_path, resilient=False, host=DEFAULT_HOST,
 
     single = in_path.endswith('.mp4')
 
-    print('Creating output directories at "{out_path}"...'.format(out_path=out_path))
+    print('Creating output directories at "{}"...'.format(out_path))
     output_dirs = create_output_dirs(in_path, out_path)
 
     if (script and script == 'scanner_component') \
@@ -128,10 +130,14 @@ def main(in_path, captions, out_path, resilient=False, host=DEFAULT_HOST,
         identify_faces_with_aws.main(out_path, out_path, force=force,
                                      single=single)
 
+    if (script and script == 'identity_propogation') \
+            or (not script and 'identity_propogation' not in disable):
+        identity_propogation.main(out_path, out_path, force=force,
+                                  single=single)
+
     if (script and script == 'genders') or \
             (not script and 'genders' not in disable):
         classify_gender.main(out_path, out_path, force=force, single=single)
-
 
     if captions is not None and ((script and script == 'captions')
                                  or (not script and 'captions' not in disable)):
@@ -208,9 +214,9 @@ def prepare_docker_container(host=DEFAULT_HOST, service=DEFAULT_SERVICE):
         container_up(host, service)
     except subprocess.CalledProcessError as err:
         raise PipelineException(
-            ('Could not connect to docker daemon at http://{host}.'
-            'Try running to following command: '
-            '`sudo dockerd -H tcp://{host} --log-level error &`').format(host=host)
+            ('Could not connect to docker daemon at http://{host}. '
+             'Try running to following command: '
+             '`sudo dockerd -H tcp://{host} --log-level error &`').format(host=host)
         )
 
 
