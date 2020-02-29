@@ -1,0 +1,11 @@
+# This is a sample configuration file
+
+# Scanner component options
+# num_pipelines: 8
+# stride: 3
+
+# Face identification options
+# montage_width: 10
+# montage_height: 6
+# aws_access_key_id: KEY_ID GOES HERE
+# aws_secret_access_key: SECRET_KEY GOES HERE
