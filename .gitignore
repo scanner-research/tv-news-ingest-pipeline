@@ -7,3 +7,4 @@ db_name
 *.mp4
 debug/
 */**/__pycache__/
+-examples/*

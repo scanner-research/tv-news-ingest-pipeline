@@ -174,7 +174,7 @@ def format_bbox_file_data(video_dir: str, video: Video, face_sample_rate: int):
             if identity:
                 face_bbox['i'] = identity_to_id[identity]
         face_bboxes.append(face_bbox)
-    return face_bboxes
+    return {'faces': face_bboxes, 'ids': list(identity_to_id.items())}
 
 
 def collect_caption_files(video_dir: str, videos: List[Video]):
