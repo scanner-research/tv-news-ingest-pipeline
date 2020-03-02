@@ -41,8 +41,10 @@ directory in an easy to use structure and format.
 
 ## Getting Started
 
-Note: the TV News pipeline is only supported (and, most importantly, tested) 
-on Linux.
+Note: the TV News pipeline is only "officially" supported on Linux, however 
+advanced users can attempt to run it on MacOS (you'll likely need to 
+modify how things are installed and change the Docker host used with the 
+`--host` option [see [Useful Options](#useful-options) below]). 
 
 1. Install Python3 (requires Python 3.5 or up)
 
@@ -52,11 +54,15 @@ on Linux.
 3. Clone this repository. The following instructions all take place within 
    this repo.
 
-4. Install Python dependencies with `pip3 install -r requirements.txt`
+4. Run `./install_deps.sh`. This will initialize submodule dependencies, install
+   Python depedencies with `pip3`, and install the 
+   [Gentle](https://github.com/scanner-research/gentle) submodule. Installing 
+   Gentle is a lengthy process and could take upwards of 40 minutes. It in turn 
+   will install many other dependencies, so if you wish to do a more manual 
+   installation, you can attempt to follow the chain of installation scripts and 
+   execute the commands yourself.
 
-5. Clone submodule dependencies with `git submodule init && git submodule update`
-
-6. Setup the docker container for the Scanner dependency by following the
+5. Setup the docker container for the Scanner dependency by following the
    instructions at http://scanner.run/guide/quickstart.html#quickstart. You 
    actually just need to run the following two commands:
    ```
@@ -67,7 +73,7 @@ on Linux.
    command downloads a ~5GB Docker container for Scanner, so it might take 
    some time to complete.
 
-7. If you want to enable the celebrity face identification using AWS, you 
+6. If you want to enable the celebrity face identification using AWS, you 
    will need to setup an account with AWS, and add your credentials to a 
    `config.yml` file (see [Configuration](#configuration)). Learn more at 
    https://docs.aws.amazon.com/rekognition/latest/dg/setting-up.html.
@@ -334,7 +340,7 @@ directory as `captions_orig.srt`. Mainly useful for debugging purposes.
 
 ### Time-Align Captions
 This component uses the 
-[Gentle forced aligner](#https://github.com/lowerquality/gentle) to time-align 
+[Gentle forced aligner](https://github.com/scanner-research/gentle) to time-align 
 the captions and the video's audio to give more accurate infomation about when 
 each word occurs in the video. It outputs the aligned captions file as 
 `captions.srt`, which is just like any other srt file, but with one word per 
