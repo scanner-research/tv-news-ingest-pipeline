@@ -9,14 +9,17 @@ Contains config variables for the pipeline, read from the 'config' file.
 
 import os
 
-CONFIG_FILE = 'config'
+import yaml
+
+CONFIG_FILE = 'config.yml'
 
 CONFIG_KEYS = {
-    'montage_height': 6,
-    'montage_width': 10,
-    'stride': 3,
     'num_pipelines': (os.cpu_count() // 2 if os.cpu_count() else 1),
-    'aws_credentials_file': 'aws-credentials.csv',
+    'stride': 3,
+    'montage_width': 10,
+    'montage_height': 6,
+    'aws_access_key_id': None,
+    'aws_secret_access_key': None,
 }
 
 # Set config variables defaults
@@ -26,12 +29,7 @@ for key, value in CONFIG_KEYS.items():
 # Read values from config file
 if os.path.exists(CONFIG_FILE):
     with open(CONFIG_FILE, 'r') as f:
-        for line in f.readlines():
-            line = line.strip()
-            if line == '' or line.startswith('#'):
-                continue
-
-            key, value = line.split('=')
+        keys = yaml.load(f, Loader=yaml.FullLoader)
+        for key, value in keys.items():
             assert key in CONFIG_KEYS, 'Invalid configuration key.'
-
-            vars()[key.upper()] = type(CONFIG_KEYS[key])(value)
+            vars()[key.upper()] = value

@@ -5,34 +5,20 @@ File: classify_gender.py
 ------------------------
 Script for classifying gender using face embeddings.
 
-Example #1: Single
-------------------
+Example
+-------
 
-        in_path:  my_output_dir
-        out_path: my_output_dir
-
-    where 'my_output_dir' contains 'embeddings.json'
-
-    outputs
-
-        my_output_dir/
-        └── genders.json
-
-
-Example #2: Batch
------------------
-
-        in_path:  my_output_dir
-        out_path: my_output_dir
+    in_path:  output_dir
+    out_path: output_dir
         
-    where 'my_output_dir' contains video output subdirectories
+    where 'output_dir' contains video output subdirectories
 
     outputs 
 
-        my_output_dir/
-        ├── my_video1
+        output_dir/
+        ├── video1
         │   └── genders.json
-        └── my_video2
+        └── video2
             └── genders.json
 
 """
@@ -46,7 +32,7 @@ from tqdm import tqdm
 from sklearn.neighbors import KNeighborsClassifier
 
 from util.utils import save_json, load_json, get_base_name
-from util.consts import OUTFILE_EMBEDS, OUTFILE_GENDERS
+from util.consts import FILE_EMBEDS, FILE_GENDERS
 
 GENDER_TRAIN_X_FILE = 'gender_model/train_X.npy'
 GENDER_TRAIN_Y_FILE = 'gender_model/train_y.npy'
@@ -66,50 +52,30 @@ def get_args():
                         help='path to output directory')
     parser.add_argument('-f', '--force', action='store_true',
                         help='force overwrite existing output')
-    parser.add_argument('-s', '--single', action='store_true', 
-                        help='single video (as opposed to batch)')
     return parser.parse_args()
 
 
-def main(in_path, out_path, force=False, single=False):
-    # Check whether input is single or batch
-    if single:
-        if not os.path.isdir(out_path):
-            os.makedirs(out_path)
-
-        pbar = tqdm(total=1, desc='Classifying genders', unit='video')
-        embeds_path = os.path.join(in_path, OUTFILE_EMBEDS)
-        if not os.path.exists(embeds_path):
-            print('No face embeddings available, skipping gender classification')
-            pbar.update()
-            return
-
-        genders_outpath = os.path.join(out_path, OUTFILE_GENDERS)
-        if force or not os.path.exists(genders_outpath):
-            process_single(embeds_path, genders_outpath)
-        
-        pbar.update()
-        return
-
+def main(in_path, out_path, force=False):
     video_names = list(os.listdir(in_path))
     out_paths = [os.path.join(out_path, name) for name in video_names]
     
     for p in out_paths:
-        if not os.path.isdir(p):
-            os.makedirs(p)
+        os.makedirs(p, exist_ok=True)
     
     with Pool() as workers, tqdm(
         total=len(video_names), desc='Classifying genders', unit='video'
     ) as pbar:
         for video_name, output_dir in zip(video_names, out_paths):
-            embeds_path = os.path.join(in_path, video_name, OUTFILE_EMBEDS)
-            genders_outpath = os.path.join(output_dir, OUTFILE_GENDERS)
+            embeds_path = os.path.join(in_path, video_name, FILE_EMBEDS)
+            genders_outpath = os.path.join(output_dir, FILE_GENDERS)
             if force or not os.path.exists(genders_outpath):
                 workers.apply_async(
                     process_single,
                     args=(embeds_path, genders_outpath),
                     callback=lambda x: pbar.update())
             else:
+                tqdm.write("Skipping classifying gender for video '{}': '{}' " 
+                      "already exists!".format(video_name, FILE_GENDERS))
                 pbar.update()
 
         workers.close()

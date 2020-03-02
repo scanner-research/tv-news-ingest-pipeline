@@ -5,35 +5,21 @@ File: identify_faces_with_aws.py
 --------------------------------
 Script for identifying faces from face crops through AWS.
 
-Example #1: Single
-------------------
+Example
+-------
 
-        in_path:  my_output_dir
-        out_path: my_output_dir
-
-    where 'my_output_dir' contains 'crops' directory of face crop images.
-
-    outputs
-
-        my_output_dir/
-        └── identities.json
-
-
-Example #2: Batch
------------------
-
-        in_path:  my_output_dir
-        out_path: my_output_dir
+    in_path:  output_dir
+    out_path: output_dir
         
-    where 'my_output_dir' contains video output subdirectories (which in turn 
+    where 'output_dir' contains video output subdirectories (which in turn 
     contain their own 'crops' directories)
 
     outputs 
 
-        my_output_dir/
-        ├── my_video1
+        output_dir/
+        ├── video1
         │   └── identities.json
-        └── my_video2
+        └── video2
             └── identities.json
 
 where there is one JSON file per video containing a list of (face_id, identity)
@@ -54,8 +40,8 @@ import tqdm
 from tqdm import tqdm
 import boto3
 
-from util.consts import OUTFILE_IDENTITIES, OUTDIR_CROPS
-from util.config import AWS_CREDENTIALS_FILE, MONTAGE_WIDTH, MONTAGE_HEIGHT
+from util.consts import FILE_IDENTITIES, DIR_CROPS
+from util.config import AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, MONTAGE_WIDTH, MONTAGE_HEIGHT
 from components.montage_face_images import create_montage_bytes
 from util.utils import get_base_name, load_json, save_json
 
@@ -68,38 +54,15 @@ def get_args():
     parser.add_argument('in_path', help=('path to directory for a single '
             'video or to a directory with subdirectories for each video'))
     parser.add_argument('out_path', help='path to output directory')
-    parser.add_argument('--credential-file', type=str,
-                        default=AWS_CREDENTIALS_FILE)
     parser.add_argument('-f', '--force', action='store_true',
                         help='force overwrite existing output')
-    parser.add_argument('-s', '--single', action='store_true',
-                        help='single video (as opposed to batch)')
     return parser.parse_args()
 
 
-def main(in_path, out_path, credential_file=AWS_CREDENTIALS_FILE, force=False,
-         single=False):
+def main(in_path, out_path, force=False):
     # Check if input is for a batch or single video
-    if single:  # single
-        if not os.path.isdir(out_path):
-            os.makedirs(out_path)
-
-        pbar = tqdm(total=1, desc='Identifying faces', unit='video')
-        crops_path = os.path.join(in_path, OUTDIR_CROPS)
-        if not os.path.exists(crops_path):
-            print('No face crops available, skipping face identification')
-            pbar.update()
-            return
-        
-        identities_outpath = os.path.join(out_path, OUTFILE_IDENTITIES)
-        if force or not os.path.exists(identities_outpath):
-            process_video(crops_path, identities_outpath, 100)
-        
-        pbar.update()
-        return
-    else:  # batch
-        video_names = list(os.listdir(in_path))
-        out_paths = [os.path.join(out_path, name) for name in video_names]
+    video_names = list(os.listdir(in_path))
+    out_paths = [os.path.join(out_path, name) for name in video_names]
 
     for p in out_paths:
         if not os.path.isdir(p):
@@ -112,13 +75,15 @@ def main(in_path, out_path, credential_file=AWS_CREDENTIALS_FILE, force=False,
         total=len(video_names), desc='Identifying faces', unit='video'
     ) as pbar:
         for video_name, output_dir in zip(video_names, out_paths):
-            crops_path = os.path.join(in_path, video_name, OUTDIR_CROPS)
+            crops_path = os.path.join(in_path, video_name, DIR_CROPS)
             if not os.path.exists(crops_path):
-                print('Skipping face identification for {}'.format(video_name))
+                tqdm.write("Skipping face identification for video '{}': no "
+                           "'{}' directory found!".format(video_name,
+                                                          DIR_CROPS))
                 pbar.update()
                 continue
 
-            identities_outpath = os.path.join(output_dir, OUTFILE_IDENTITIES)
+            identities_outpath = os.path.join(output_dir, FILE_IDENTITIES)
             if force or not os.path.exists(identities_outpath):
                 workers.apply_async(
                     process_video,
@@ -126,6 +91,8 @@ def main(in_path, out_path, credential_file=AWS_CREDENTIALS_FILE, force=False,
                           num_threads_per_worker),
                     callback=lambda x: pbar.update())
             else:
+                tqdm.write("Skipping face identification for video '{}': '{}' "
+                    "already exists!".format(video_name, FILE_IDENTITIES))
                 pbar.update()
 
         workers.close()
@@ -155,7 +122,7 @@ def process_video(crops_path, identities_outpath, max_threads=100):
 
 
 def submit_images_for_labeling(crops_path, img_files):
-    client = load_client(AWS_CREDENTIALS_FILE)
+    client = load_client()
     img_filepaths = [os.path.join(crops_path, f) for f in img_files]
     montage_bytes, meta = create_montage_bytes(img_filepaths)
     img_ids = [int(get_base_name(x)) for x in img_files]
@@ -265,14 +232,10 @@ def process_labeling_results(
     return [(k, v[0], v[1]) for k, v in labels.items()]
 
 
-def load_client(credential_file):
-    with open(credential_file) as f:
-        f.readline()
-        _, _, key_id, key_secret, _ = f.readline().split(',')
-
+def load_client():
     session = boto3.session.Session()
-    return session.client('rekognition', aws_access_key_id=key_id,
-                          aws_secret_access_key=key_secret,
+    return session.client('rekognition', aws_access_key_id=AWS_ACCESS_KEY_ID,
+                          aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
                           region_name='us-west-1')
 
 

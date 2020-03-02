@@ -17,39 +17,21 @@ pipeline, so if you run into any errors related to memory, try decreasing the
 number of pipelines.
 
 
-Example #1: Single Video
-------------------------
+Example
+-------
 
-        in_path:  my_video.mp4
-        out_path: my_output_dir
+    in_path:  batch.txt (or video1.mp4)
+    out_path: output_dir
 
-    outputs
+    where 'batch.txt' looks like:
 
-        my_output_dir/
-        ├── bboxes.json
-        ├── crops
-        │   ├── 0.png
-        │   ├── 1.png
-        │   └── 2.png
-        ├── embeddings.json
-        └── metadata.json
-        
-
-Example #2: Batch Video
------------------------
-
-        in_path:  my_batch.txt
-        out_path: my_output_dir
-
-    where 'my_batch.txt' looks like:
-
-        path/to/my_video1.mp4
-        different/path/to/my_video2.mp4
+        path/to/video1.mp4
+        different/path/to/video2.mp4
 
     outputs
 
-        my_output_dir/
-        ├── my_video1/
+        output_dir/
+        ├── video1/
         │   ├── bboxes.json
         │   ├── crops
         │   │   ├── 0.png
@@ -57,7 +39,7 @@ Example #2: Batch Video
         │   │   └── 2.png
         │   ├── embeddings.json
         │   └── metadata.json
-        └── my_video2/
+        └── video2/
             ├── bboxes.json
             ├── crops
             │   ├── 0.png
@@ -87,15 +69,28 @@ import scannertools.face_detection
 import scannertools.face_embedding
 from scannertools.face_embedding import FacenetEmbeddings
 
-from components.face_detection_and_embeddings import (dilate_bboxes, crop_faces,
-                                           get_face_bboxes_results,
-                                           get_face_embeddings_results,
-                                           handle_face_crops_results)
+from components.face_detection_and_embeddings import (
+    dilate_bboxes,
+    crop_faces,
+    get_face_bboxes_results,
+    get_face_embeddings_results,
+    handle_face_crops_results
+)
 from util.config import NUM_PIPELINES, STRIDE
-from util.consts import (OUTFILE_BBOXES, OUTFILE_EMBEDS, OUTFILE_METADATA,
-                    OUTDIR_CROPS, SCANNER_COMPONENT_OUTPUTS)
-from util.utils import (get_base_name, get_batch_io_paths, init_scanner_config,
-                   json_is_valid, remove_unfinished_outputs, save_json)
+from util.consts import (
+    FILE_BBOXES,
+    FILE_EMBEDS,
+    FILE_METADATA,
+    DIR_CROPS,
+    SCANNER_COMPONENT_OUTPUTS
+)
+from util.utils import (
+    get_base_name,
+    init_scanner_config,
+    json_is_valid,
+    remove_unfinished_outputs,
+    save_json
+)
 
 # Suppress tensorflow warnings
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -129,12 +124,12 @@ def main(in_path, out_path, init_run=False, force_rerun=False,
 
     init_scanner_config()
 
-    if not in_path.endswith('.mp4'):
-        video_paths, out_paths = get_batch_io_paths(in_path, out_path)
-    else:
+    if in_path.endswith('.mp4'):
         video_paths = [in_path]
-        out_paths = [out_path]
-
+    else:
+        video_paths = [l.strip() for l in open(in_path, 'r') if l.strip()]
+    
+    out_paths = [os.path.join(out_path, get_base_name(v)) for v in video_paths]
     process_videos(video_paths, out_paths, init_run, force_rerun, pipelines, 
                    interval, disable)
 
@@ -154,12 +149,12 @@ def process_videos(video_paths, out_paths, init_run=False, rerun=False,
     if not init_run and not rerun:
         for i in range(len(video_names) - 1, -1, -1):
             if (('face_detection' in disable
-                or json_is_valid(os.path.join(out_paths[i], OUTFILE_BBOXES)))
+                or json_is_valid(os.path.join(out_paths[i], FILE_BBOXES)))
                 and ('face_embeddings' in disable
-                    or json_is_valid(os.path.join(out_paths[i], OUTFILE_EMBEDS)))
-                and json_is_valid(os.path.join(out_paths[i], OUTFILE_METADATA))
+                    or json_is_valid(os.path.join(out_paths[i], FILE_EMBEDS)))
+                and json_is_valid(os.path.join(out_paths[i], FILE_METADATA))
                 and ('face_crops' in disable
-                    or os.path.isdir(os.path.join(out_paths[i], OUTDIR_CROPS)))
+                    or os.path.isdir(os.path.join(out_paths[i], DIR_CROPS)))
             ):
                 video_names.pop(i)
                 out_paths.pop(i)
@@ -267,13 +262,13 @@ def process_videos(video_paths, out_paths, init_run=False, rerun=False,
                     cropped_faces = list(output_crops.load())
 
                 # Save metadata
-                metadata_outpath = os.path.join(out_path, OUTFILE_METADATA)
+                metadata_outpath = os.path.join(out_path, FILE_METADATA)
                 save_json(meta, metadata_outpath)
                 pbar.update()
                 
                 # Save bboxes
                 if output_faces is not None:
-                    bbox_outpath = os.path.join(out_path, OUTFILE_BBOXES)
+                    bbox_outpath = os.path.join(out_path, FILE_BBOXES)
                     callback = partial(callback_fn, path=bbox_outpath,
                                        save_fn=save_json, pbar=pbar)
                     workers.apply_async(
@@ -285,7 +280,7 @@ def process_videos(video_paths, out_paths, init_run=False, rerun=False,
 
                 # Save embeddings
                 if output_embeddings is not None:
-                    embed_outpath = os.path.join(out_path, OUTFILE_EMBEDS)
+                    embed_outpath = os.path.join(out_path, FILE_EMBEDS)
                     workers.apply_async(
                         get_face_embeddings_results,
                         args=(embedded_faces,),
@@ -298,7 +293,7 @@ def process_videos(video_paths, out_paths, init_run=False, rerun=False,
                     tmp_path = os.path.join(tmp_dir, '{}.pkl'.format(video_name))
                     with open(tmp_path, 'wb') as f:
                         pickle.dump(cropped_faces, f)
-                    crops_outpath = os.path.join(out_path, OUTDIR_CROPS)
+                    crops_outpath = os.path.join(out_path, DIR_CROPS)
                     result = workers.apply_async(
                         handle_face_crops_results, 
                         args=(tmp_path, crops_outpath),
@@ -312,7 +307,6 @@ def process_videos(video_paths, out_paths, init_run=False, rerun=False,
                     output_embeddings.committed(), output_crops.committed()
                 ))
 
-                                    
         workers.close()
         workers.join()
 

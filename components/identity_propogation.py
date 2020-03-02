@@ -7,8 +7,8 @@ import numpy as np
 from sklearn.metrics.pairwise import euclidean_distances
 from tqdm import tqdm
 
-from util.consts import (OUTFILE_IDENTITIES, OUTFILE_EMBEDS,
-                         OUTFILE_IDENTITIES_PROP)
+from util.consts import (FILE_IDENTITIES, FILE_EMBEDS,
+                         FILE_IDENTITIES_PROP)
 from util.utils import load_json, save_json
 
 PROB_THRESH = 0.9
@@ -16,25 +16,7 @@ MIN_LABEL_THRESH = 5
 L2_THRESH = 0.7
 
 
-def main(in_path, out_path, single=False, force=False):
-    if single:
-        if not os.path.isdir(out_path):
-            os.makedirs(out_path)
-
-        with tqdm(total=1, desc='Classifying genders', unit='video') as pbar:
-            identities_path = os.path.join(in_path, OUTFILE_IDENTITIES)
-            embeds_path = os.path.join(in_path, OUTFILE_EMBEDS)
-            propogated_ids_outpath = os.path.join(out_path,
-                                                  OUTFILE_IDENTITIES_PROP)
-            if force or not os.path.exists(propogated_ids_outpath):
-                process_single(identities_path, embeds_path,
-                               propogated_ids_outpath)
-
-            pbar.update()
-
-        return
-
-    # Else batch:
+def main(in_path, out_path, force=False):
     video_names = list(os.listdir(in_path))
     out_paths = [os.path.join(out_path, name) for name in video_names]
 
@@ -47,10 +29,10 @@ def main(in_path, out_path, single=False, force=False):
     ) as pbar:
         for video_name, output_dir in zip(video_names, out_paths):
             identities_path = os.path.join(in_path, video_name,
-                                           OUTFILE_IDENTITIES)
-            embeds_path = os.path.join(in_path, video_name, OUTFILE_EMBEDS)
+                                           FILE_IDENTITIES)
+            embeds_path = os.path.join(in_path, video_name, FILE_EMBEDS)
             propogated_ids_outpath = os.path.join(output_dir,
-                                                  OUTFILE_IDENTITIES_PROP)
+                                                  FILE_IDENTITIES_PROP)
             if force or not os.path.exists(propogated_ids_outpath):
                 workers.apply_async(
                     process_single,

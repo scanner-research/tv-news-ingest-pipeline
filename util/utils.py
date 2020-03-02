@@ -68,14 +68,6 @@ def json_is_valid(path: str) -> bool:
     return True
 
 
-def get_batch_io_paths(in_path, out_path):
-    with open(in_path, 'r') as f:
-        in_paths = [l.strip() for l in f if l.strip()]
-        out_paths = [os.path.join(out_path, get_base_name(p)) for p in in_paths]
-
-    return in_paths, out_paths
-
-
 def update_pbar(bar):
     def update(x):
         bar.update()

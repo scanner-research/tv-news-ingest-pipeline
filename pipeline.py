@@ -25,18 +25,21 @@ script takes the video(s) through the following stages:
 Sample output directory after pipeline completion:
 
     output_dir/
-    ├── video_name1
+    ├── video1
+    │   ├── alignment_stats.json
     │   ├── bboxes.json
     │   ├── black_frames.json
     │   ├── embeddings.json
     │   ├── genders.json
     │   ├── identities.json
+    │   ├── identities_propogated.json
     │   ├── metadata.json
     │   ├── captions.srt
+    │   ├── captions_orig.srt
     │   └── crops
     │       ├── 0.png
     │       └── 1.png
-    ├── video_name2
+    ├── video2
     │   └── ...
     └── ... 
 
@@ -46,18 +49,24 @@ import argparse
 import glob
 from multiprocessing import Pool
 import os
+from pathlib import Path
 import shutil
 import subprocess
+import time
 
 from tqdm import tqdm
 
-from components import (classify_gender, identify_faces_with_aws,
-                        identity_propogation)
-from util.consts import (OUTFILE_EMBEDS, OUTFILE_GENDERS, OUTDIR_MONTAGES,
-                         OUTFILE_IDENTITIES, OUTFILE_CAPTIONS)
-from util.docker_compose_api import (container_up, container_down,
-                                     pull_container, run_command_in_container,
-                                     DEFAULT_HOST, DEFAULT_SERVICE)
+from components import (classify_gender,
+                        identify_faces_with_aws,
+                        identity_propogation,
+                        caption_alignment)
+from util.consts import FILE_CAPTIONS_ORIG
+from util.docker_compose_api import (container_up,
+                                     container_down,
+                                     pull_container,
+                                     run_command_in_container,
+                                     DEFAULT_HOST,
+                                     DEFAULT_SERVICE)
 from util.utils import get_base_name, update_pbar
 
 NAMED_COMPONENTS = [
@@ -69,7 +78,8 @@ NAMED_COMPONENTS = [
     'identities',
     'identity_propogation',
     'genders',
-    'captions'
+    'captions_copy',
+    'caption_alignment'
 ]
 
 
@@ -84,8 +94,6 @@ def get_args():
     parser.add_argument('--captions', help=('path to srt or to a text file '
                                             'containing srt filepaths'))
     parser.add_argument('out_path', help='path to output directory')
-    parser.add_argument('-r', '--resilient', action='store_true',
-                        help='leave docker container up after execution')
     parser.add_argument('--host', type=str, default=DEFAULT_HOST, 
                         help='docker host IP:port')
     parser.add_argument('--service', type=str, default=DEFAULT_SERVICE,
@@ -102,116 +110,112 @@ def get_args():
     return parser.parse_args()
 
 
-def main(in_path, captions, out_path, resilient=False, host=DEFAULT_HOST,
+def main(in_path, captions, out_path, host=DEFAULT_HOST,
          service=DEFAULT_SERVICE, init_run=False, force=False,
          disable=None, script=None):
+
+    start = time.time()
 
     if disable is None:
         disable = []
 
-    single = in_path.endswith('.mp4')
+    # Validate file formats
+    single = not in_path.endswith('.txt') and not os.path.isdir(in_path)
+    if single and not in_path.endswith('.mp4'):
+        print('Only the mp4 video format is supported. Exiting.')
+        return
+
+    if single and captions is not None and not captions.endswith('.srt'):
+        print('Only the srt captions format is supported. Exiting.')
+        return
 
     print('Creating output directories at "{}"...'.format(out_path))
-    output_dirs = create_output_dirs(in_path, out_path)
-
+    video_paths, output_dirs = create_output_dirs(in_path, out_path, single)
+    video_dirpaths = [str(Path(p).parent) for p in video_paths]
+    
+    # Step through each pipeline component
     if (script and script == 'scanner_component') \
             or (not script and 'scanner_component' not in disable):
-        run_scanner_component(in_path, out_path, disable, init_run, force,
-                              host=host, service=service)
+        run_scanner_component(in_path, out_path, video_dirpaths, disable,
+                              init_run, force, host=host, service=service)
   
     if (script and script == 'black_frames') \
             or (not script and 'black_frames' not in disable):
-        run_black_frame_detection(in_path, out_path, init_run, force,
-                docker_up=('scanner_component' in disable),
-                docker_down=(not resilient), host=host, service=service)
+        run_black_frame_detection(in_path, out_path, video_dirpaths, init_run,
+                force, host=host, service=service)
 
     if (script and script == 'identities') \
             or (not script and 'identities' not in disable):
-        identify_faces_with_aws.main(out_path, out_path, force=force,
-                                     single=single)
+        identify_faces_with_aws.main(out_path, out_path, force=force)
 
     if (script and script == 'identity_propogation') \
             or (not script and 'identity_propogation' not in disable):
-        identity_propogation.main(out_path, out_path, force=force,
-                                  single=single)
+        identity_propogation.main(out_path, out_path, force=force)
 
     if (script and script == 'genders') or \
             (not script and 'genders' not in disable):
-        classify_gender.main(out_path, out_path, force=force, single=single)
+        classify_gender.main(out_path, out_path, force=force)
 
-    if captions is not None and ((script and script == 'captions')
-                                 or (not script and 'captions' not in disable)):
-        copy_captions(captions, out_path)
-    
+    if captions is not None:
+        if (script and script == 'captions_copy') \
+                or (not script and 'captions_copy' not in disable):
+            copy_captions(captions, out_path)
 
-def create_output_dirs(video_path: str, output_path: str) -> list:
+        if (script and script == 'caption_alignment') \
+                or (not script and 'caption_alignment' not in disable):
+            caption_alignment.main(in_path, captions, out_path, force=force)
+
+    if not script:
+        end = time.time()
+        print('Pipeline completed in {:.2f} seconds.'.format(end - start))
+
+
+def create_output_dirs(in_path, out_path, single):
     """
     Creates output subdirectories for each video being processed.
     Necessary due to docker container processes being owned by root.
 
     Args:
-        video_path: path to the video file or textfile containing filepaths.
-        output_path: path to the output directory.
+        in_path (str): path to a video file or batch text file containing
+                       filepaths 
+        out_path (str): path to the output directory.
 
     Returns:
-        a list of output directory paths.
+        a list of video filepaths and a list of output directory paths.
 
     """
 
-    if not video_path.endswith('.mp4'):
-        with open(video_path, 'r') as f:
-            video_paths = [l.strip() for l in f if l.strip()]
+    if single:
+        video_paths = [in_path]
 
-        out_paths = [os.path.join(output_path, get_base_name(v))
-                     for v in video_paths]
-        for out in out_paths:
-            if not os.path.exists(out):
-                os.makedirs(out)
+    else:  # in_path is a batch text file
+        video_paths = [l.strip() for l in open(in_path, 'r') if l.strip()]
 
-        return out_paths
+    out_paths = [os.path.join(out_path, get_base_name(v)) for v in video_paths]
+    for out in out_paths:
+        os.makedirs(out, exist_ok=True)
 
-    else:
-        if not os.path.exists(output_path):
-            os.makedirs(output_path)
+    return video_paths, out_paths
 
-        return [output_path]
-        
 
-def run_scanner_component(in_path, out_path, disable=None, init_run=False,
-                          force_rerun=False, docker_up=True, docker_down=False,
+def run_scanner_component(in_path, out_path, video_dirpaths, disable=None,
+                          init_run=False, force_rerun=False, 
                           host=DEFAULT_HOST, service=DEFAULT_SERVICE):
-    if docker_up:
-        prepare_docker_container(host, service)
-
     cmd = build_scanner_component_command(in_path, out_path, disable, init_run,
                                           force_rerun)
-    run_command_in_container(cmd, host, service)
-
-    if docker_down:
-        print('Shutting down docker container...')
-        container_down(host=host)
+    run_command_in_container(cmd, video_dirpaths, host, service)
 
 
-def run_black_frame_detection(in_path, out_path, init_run=False,
-        force_rerun=False, docker_up=False, docker_down=False,
-        host=DEFAULT_HOST, service=DEFAULT_SERVICE):
-    if docker_up:
-        prepare_docker_container(host, service)
-
+def run_black_frame_detection(in_path, out_path, video_dirpaths, init_run=False,
+        force_rerun=False, host=DEFAULT_HOST, service=DEFAULT_SERVICE):
     cmd = build_black_frame_detection_command(in_path, out_path, init_run,
                                               force_rerun)
-    run_command_in_container(cmd, host, service)
-
-    if docker_down:
-        print('Shutting down docker container...')
-        container_down(host=host)
+    run_command_in_container(cmd, video_dirpaths, host, service)
 
 
 def prepare_docker_container(host=DEFAULT_HOST, service=DEFAULT_SERVICE):
     try:
-        print('Getting docker container ready...')
         pull_container(host, service)
-        container_up(host, service)
     except subprocess.CalledProcessError as err:
         raise PipelineException(
             ('Could not connect to docker daemon at http://{host}. '
@@ -252,22 +256,23 @@ def build_black_frame_detection_command(in_path, out_path, init_run=False,
 
 def copy_captions(in_path, out_dir):
     if in_path.endswith('.srt'):
-        pbar = tqdm(total=1, desc='Copying captions', unit='video')
-        out_path = os.path.join(out_dir, OUTFILE_CAPTIONS)
-        if not os.path.exists(out_path):
-            shutil.copy(in_path, out_path)
-        pbar.update()
+        caption_paths = [in_path]
+        out_paths = [
+            os.path.join(out_dir, get_base_name(in_path), FILE_CAPTIONS_ORIG)
+        ]
+
     else:
         with open(in_path, 'r') as f:
-            paths = [l.strip() for l in f if l.strip()]
-        video_names = [get_base_name(p) for p in paths]
-        out_paths = [os.path.join(out_dir, v, OUTFILE_CAPTIONS)
+            caption_paths = [l.strip() for l in f if l.strip()]
+        video_names = [get_base_name(p) for p in caption_paths]
+        out_paths = [os.path.join(out_dir, v, FILE_CAPTIONS_ORIG)
                      for v in video_names]
-        for captions, out_path in zip(
-            tqdm(paths, desc='Copying captions', unit='video'), out_paths
-        ):
-            if not os.path.exists(out_path):
-                shutil.copy(captions, out_path)
+
+    for captions, out_path in zip(tqdm(caption_paths, 
+        desc='Copying original captions', unit='video'), out_paths
+    ):
+        if not os.path.exists(out_path):
+            shutil.copy(captions, out_path)
 
 
 if __name__ == '__main__':

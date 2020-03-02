@@ -15,7 +15,6 @@ import json
 import numpy as np
 from PIL import Image
 
-from util.consts import OUTDIR_MONTAGES
 from util.config import MONTAGE_WIDTH, MONTAGE_HEIGHT
 from util.utils import get_base_name
 
@@ -27,6 +26,7 @@ assert IMG_SIZE + 2 * PADDING == BLOCK_SIZE, \
     'Bad padding: {}'.format(IMG_SIZE + 2 * PADDING)
 
 BLANK_IMAGE = np.zeros((BLOCK_SIZE, BLOCK_SIZE, 3), dtype=np.uint8)
+
 
 def create_montage_bytes(img_filepaths, nrows=MONTAGE_HEIGHT,
                          ncols=MONTAGE_WIDTH):

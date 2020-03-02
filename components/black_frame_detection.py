@@ -14,35 +14,23 @@ If docker is running as root (which it most commonly will be), then all
 directories and files created will be owned by root.
 
 
-Example #1: Single
-------------------
+Example
+-------
 
-        in_path:  my_video.mp4
-        out_path: my_output_dir
-
-    outputs
-
-        my_output_dir/
-        └── black_frames.json
-
-
-Example #2: Batch
------------------
-
-        in_path:  my_batch.txt
-        out_path: my_output_dir
+    in_path:  batch.txt
+    out_path: output_dir
         
-    where 'my_batch.txt' looks like:
+    where 'batch.txt' looks like:
 
-        path/to/my_video1.mp4
-        different/path/to/my_video2.mp4
+        path/to/video1.mp4
+        different/path/to/video2.mp4
 
     outputs 
 
-        my_output_dir/
-        ├── my_video1
+        output_dir/
+        ├── video1
         │   └── black_frames.json
-        └── my_video2
+        └── video2
             └── black_frames.json
 
 """
@@ -62,9 +50,14 @@ from scannerpy.types import Histogram
 import scannertools.imgproc  # for op Histogram
 
 from util.config import NUM_PIPELINES
-from util.consts import OUTFILE_BLACK_FRAMES
-from util.utils import (get_base_name, get_batch_io_paths, init_scanner_config,
-                   json_is_valid, remove_unfinished_outputs, save_json)
+from util.consts import FILE_BLACK_FRAMES
+from util.utils import (
+    get_base_name, 
+    init_scanner_config,
+    json_is_valid,
+    remove_unfinished_outputs,
+    save_json
+)
 
 # Twice as manner for black frames as for face detection.
 NUM_PIPELINES = NUM_PIPELINES * 2
@@ -87,13 +80,13 @@ def get_args():
 def main(in_path, out_path, init_run=False, force_rerun=False,
          pipelines=NUM_PIPELINES):
     init_scanner_config()
-
-    if not in_path.endswith('.mp4'):
-        video_paths, out_paths = get_batch_io_paths(in_path, out_path)
-    else:
+    
+    if in_path.endswith('.mp4'):
         video_paths = [in_path]
-        out_paths = [out_path]
+    else:  # batch text file
+        video_paths = [l.strip() for l in open(in_path, 'r') if l.strip()]
 
+    out_paths = [os.path.join(out_path, get_base_name(v)) for v in video_paths]
     process_videos(video_paths, out_paths, init_run, force_rerun, pipelines)
 
 
@@ -108,7 +101,7 @@ def process_videos(video_paths, out_paths, init_run=False, rerun=False,
     video_names = [get_base_name(path) for path in video_paths]
     if not init_run and not rerun:
         for i in range(len(video_names) - 1, -1, -1):
-            if json_is_valid(os.path.join(out_paths[i], OUTFILE_BLACK_FRAMES)):
+            if json_is_valid(os.path.join(out_paths[i], FILE_BLACK_FRAMES)):
                 video_names.pop(i)
                 out_paths.pop(i)
 
@@ -150,7 +143,7 @@ def process_videos(video_paths, out_paths, init_run=False, rerun=False,
                     os.makedirs(out_path)
 
                 black_frames_outpath = os.path.join(out_path,
-                                                    OUTFILE_BLACK_FRAMES)
+                                                    FILE_BLACK_FRAMES)
                 workers.apply_async(
                     get_black_frames_results,
                     args=(video_black_frames,),

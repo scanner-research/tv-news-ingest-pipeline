@@ -10,3 +10,4 @@ internetarchive
 docker-compose
 opencv-python-headless
 pysrt
+pyyaml

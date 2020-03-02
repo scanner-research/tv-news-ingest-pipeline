@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 File: consts.py
 ---------------
@@ -7,22 +5,23 @@ Contains constants used across the entire pipeline.
 
 """
 
-OUTFILE_BBOXES = 'bboxes.json'
-OUTFILE_EMBEDS = 'embeddings.json'
-OUTFILE_BLACK_FRAMES = 'black_frames.json'
-OUTFILE_METADATA = 'metadata.json'
-OUTFILE_GENDERS = 'genders.json'
-OUTFILE_IDENTITIES = 'identities.json'
-OUTFILE_IDENTITIES_PROP = 'identities_propogated.json'
-OUTFILE_CAPTIONS = 'captions.srt'
-OUTDIR_CROPS = 'crops'
-OUTDIR_MONTAGES = 'montages'
+FILE_BBOXES = 'bboxes.json'
+FILE_EMBEDS = 'embeddings.json'
+FILE_BLACK_FRAMES = 'black_frames.json'
+FILE_METADATA = 'metadata.json'
+FILE_GENDERS = 'genders.json'
+FILE_IDENTITIES = 'identities.json'
+FILE_IDENTITIES_PROP = 'identities_propogated.json'
+FILE_CAPTIONS = 'captions.srt'
+FILE_CAPTIONS_ORIG = 'captions_orig.srt'
+FILE_ALIGNMENT_STATS = 'alignment_stats.json'
+DIR_CROPS = 'crops'
 
 SCANNER_COMPONENT_OUTPUTS = [
-    OUTFILE_BBOXES,
-    OUTFILE_EMBEDS,
-    OUTFILE_METADATA,
-    OUTDIR_CROPS
+    FILE_BBOXES,
+    FILE_EMBEDS,
+    FILE_METADATA,
+    DIR_CROPS
 ]
 
 LOCAL_TOML = """

@@ -1,20 +1,23 @@
-import numpy as np
-import pickle
-import pysrt
 import codecs
-import math
-import sys
-import os
-import cv2
-import logging
-import time
-import re
-import tempfile
-import scipy.io.wavfile as wavf
-import multiprocessing
 import json
-import traceback
+import math
+from multiprocessing import Pool
+import os
+import pickle
+import re
+import sys
+import tempfile
+import time
+
+import cv2
 import gentle
+import numpy as np
+import pysrt
+import scipy.io.wavfile as wavf
+from tqdm import tqdm
+
+from util.consts import FILE_ALIGNMENT_STATS, FILE_CAPTIONS
+from util.utils import get_base_name, save_json
 
 #----------Help functions for fid, time, second transfer----------
 def fid2second(fid, fps):
@@ -27,13 +30,17 @@ def time2second(time):
 
 
 def second2time(second, sep=','):
-    h, m, s, ms = int(second) // 3600, int(second % 3600) // 60, int(second) % 60, int((second - int(second)) * 1000)
+    h = int(second) // 3600
+    m = int(second % 3600) // 60 
+    s = int(second) % 60
+    ms = int((second - int(second)) * 1000) 
     return '{:02d}:{:02d}:{:02d}{:s}{:03d}'.format(h, m, s, sep, ms)
 
 
 #---------Forced transcript-audio alignment using gentle----------
 class TranscriptAligner():
-    def __init__(self, win_size=300, seg_length=60, max_misalign=10, num_thread=1, estimate=True, missing_thresh=0.2,
+    def __init__(self, win_size=300, seg_length=60, max_misalign=10,
+                 num_thread=1, estimate=True, missing_thresh=0.2,
                  transcript_path=None, media_path=None, align_dir=None):
         """
         @win_size: chunk size for estimating maximum mis-alignment
@@ -45,7 +52,9 @@ class TranscriptAligner():
         @transcript_path: path to original transcript
         @media_path: path to video/audio
         @align_dir: path to save aligned transcript
+
         """
+
         self.win_size = win_size
         self.seg_length = seg_length
         self.text_shift = max_misalign
@@ -72,16 +81,21 @@ class TranscriptAligner():
                 self.video_length = int(self.video_frames // self.fps)
                 self.num_seg = int(self.video_length // self.seg_length)
                 self.num_window = int(self.video_length // self.win_size)
-            elif ext == '.wav':
-                raise Exception("Not implemented error")
+            else:
+                raise Exception("File type '{}' not supported.".format(ext))
+
         if align_dir is not None:
             os.makedirs(align_dir, exist_ok=True)
+
+        self.pbar = None
     
     
     def load_transcript(self, transcript_path):
         """
-        Load transcript from *.srt file
+        Load transcript from .srt file.
+
         """
+
         # Check file exist
         if not os.path.exists(transcript_path):
             raise Exception("Transcript file does not exist")
@@ -103,7 +117,6 @@ class TranscriptAligner():
             text_length += transcript[-1][2] - transcript[-1][1]
             for w in sub.text.replace('.', ' ').replace('-', ' ').split():
                 num_words += 1 if w.islower() or w.isupper() else 0
-        print('Num of words in transcript:',  num_words)
 
         self.transcript = transcript
         self.num_words = num_words
@@ -111,8 +124,11 @@ class TranscriptAligner():
         
     def extract_transcript(self, start, end, offset_to_time=False):
         """
-        extract transcript between [start, end) into a string, with additional offset to timestamp/puncuation
+        Extract transcript between [start, end) into a string, with additional 
+        offset to timestamp/puncuation.
+
         """
+
         text_total = ''
         if offset_to_time:
             offset2time = {}
@@ -144,8 +160,10 @@ class TranscriptAligner():
 
     def extract_transcript_segment(self, seg_idx, large_shift=0):
         """
-        extract transcript given specific segment
+        Extract transcript given specific segment.
+
         """
+
         start = seg_idx * self.seg_length - self.text_shift - large_shift
         end = (seg_idx + 1) * self.seg_length + self.text_shift - large_shift
         return self.extract_transcript(start, end, offset_to_time=False)
@@ -153,8 +171,10 @@ class TranscriptAligner():
     
     def extract_transcript_all(self, estimate=False):
         """
-        extract transcript from all segments
+        Extract transcript from all segments.
+
         """
+
         self.text_seg_list = []
         self.punc_seg_list = []
         for seg_idx in range(self.num_seg):
@@ -166,8 +186,10 @@ class TranscriptAligner():
     
     def extract_audio(self, start, end):
         """
-        extract audio between [start, end] into a local .aac file
+        Extract audio between [start, end] into a local .aac file.
+
         """
+
         duration = end - start
         cmd = 'ffmpeg -loglevel error -i ' + self.media_path + ' -vn -acodec copy '
         cmd += '-ss {:d} -t {:d} '.format(start, duration)
@@ -179,8 +201,9 @@ class TranscriptAligner():
     
     def extract_audio_segment(self, seg_idx): 
         """
-        extract audio given specific segment
+        Extract audio given specific segment.
         """
+
         start = seg_idx * self.seg_length
         start = start - self.audio_shift if seg_idx > 0 else start
         duration = self.seg_length 
@@ -190,21 +213,28 @@ class TranscriptAligner():
     
     def extract_audio_all(self):
         """
-        extract audio from all segments parallely
+        Extract audio from all segments parallely.
+
         """
-        pool = multiprocessing.Pool(self.num_thread)
-        self.audio_seg_list = pool.map(self.extract_audio_segment, [i for i in range(self.num_seg)])
+
+        pool = Pool(self.num_thread)
+        self.audio_seg_list = pool.map(self.extract_audio_segment,
+                                       [i for i in range(self.num_seg)])
     
     
     def gentle_solve(self, audio_path, transcript):
         """
-        gentle wrapper to solve the forced alignment given audio file and text string 
+        Gentle wrapper to solve the forced alignment given audio file and
+        text string.
+
         """
-        args = {'log': 'INFO',
+
+        args = {
+            'log': 'INFO',
             'nthreads': 1,
             'conservative': True,
             'disfluency': True,
-            }
+        }
         disfluencies = set(['uh', 'um'])
         resources = gentle.Resources()
         with gentle.resampled(audio_path) as wavfile:
@@ -214,25 +244,29 @@ class TranscriptAligner():
                                            conservative=args['conservative'], 
                                            disfluencies=disfluencies)
             result = aligner.transcribe(wavfile)
+
         return [word.as_dict(without="phones") for word in result.words]
     
     
     def align_segment_thread(self, seg_idx):
         """
-        function wrapped for multiprocessing
+        Wrapper function for multiprocessing.
+
         """
-        return self.align_segment(seg_idx, self.audio_seg_list[seg_idx], self.text_seg_list[seg_idx], self.punc_seg_list[seg_idx])
-    
+        return self.align_segment(seg_idx, self.audio_seg_list[seg_idx],
+                                  self.text_seg_list[seg_idx],
+                                  self.punc_seg_list[seg_idx])
+
     
     def align_segment(self, seg_idx, audio_path, transcript, punctuation):
         """
-        call gentle and post-process aligned results
+        Call gentle and post-process aligned results.
+
         """
-        print('Starting gentle to align %dth segment' % seg_idx)
+
         aligned_seg = self.gentle_solve(audio_path, transcript)
-        print('Finished gentle to align %dth segment' % seg_idx)
         
-        # insert punctuation
+        # Insert punctuation
         start_idx = 0
         for offset, p in punctuation:
             for word_idx, word in enumerate(aligned_seg[start_idx:]):
@@ -271,11 +305,13 @@ class TranscriptAligner():
                     enter_alignment = True
                     cur_start = word['start'] + seg_start
                     cur_end = word['end'] + seg_start
+
                     # make sure the prev_end <= cur_start
                     if len(align_word_list) > 0:
                         prev_end = align_word_list[-1][1][1]
                         if prev_end > cur_start and prev_end < cur_end:
                             cur_start = prev_end
+
                     # mis-aligned word handling
                     if len(word_missing) <= 2:
                         num_word_aligned += len(word_missing)
@@ -285,13 +321,16 @@ class TranscriptAligner():
                             align_word_list.append(('{'+w+'}', (prev_end+i*step, prev_end+(i+1)*step)))
                         word_missing = []
                     align_word_list.append((word['word'], (cur_start, cur_end)))
+
         return {'align_word_list': align_word_list, 'num_word_aligned': num_word_aligned}    
     
     
     def estimate_shift_clip(self, audio_path, audio_start, transcript, offset2time):
         """
-        Given an audio clip, call gentle and then estimate a rough mis-alignment
+        Given an audio clip, call gentle and then estimate a rough misalignment.
+
         """
+
         aligned_clip = self.gentle_solve(audio_path, transcript)
         
         align_word_list = []
@@ -305,7 +344,6 @@ class TranscriptAligner():
 #                 else:
 #                     shift = 0
 #                 align_word_list.append((word['word'], word['start'] + audio_start, shift))
-#         print(align_word_list)
         l = len(shift_list)
         if l < 4:
             return None
@@ -315,8 +353,10 @@ class TranscriptAligner():
     
     def estimate_shift_window(self, win_idx):
         """
-        Estimate rough mis-alignment given a specific window
+        Estimate rough misalignment given a specific window.
+
         """
+
         transcript, offset2time = self.extract_transcript((win_idx-1)*self.win_size, (win_idx+2)*self.win_size, offset_to_time=True)
         shift_list = []
         for audio_shift in range(self.seg_length//2, self.win_size, self.seg_length):  
@@ -334,10 +374,24 @@ class TranscriptAligner():
     
     def estimate_shift_all(self):
         """
-        Estimate rough mis-alignment for all windows 
+        Estimate rough mis-alignment for all windows.
+
         """
-        pool = multiprocessing.Pool(self.num_thread)
-        shift_window_list = pool.map(self.estimate_shift_window, [i for i in range(self.num_window)])
+        with Pool(self.num_thread) as workers, tqdm(
+            total=self.num_window,
+            desc='Estimating shift window',
+            unit='window'
+        ) as pbar:
+            results = [workers.apply_async(
+                self.estimate_shift_window,
+                args=(i,),
+                callback=lambda x: pbar.update()
+            ) for i in range(self.num_window)]
+
+            workers.close()
+            workers.join()
+        
+        shift_window_list = [r.get() for f in results]
         shift_seg_list = []
         for shift in shift_window_list:
             shift_seg_list += [shift] * (self.win_size // self.seg_length)
@@ -347,31 +401,40 @@ class TranscriptAligner():
     
     def prepare_input(self):
         """
-        Prepare transcript and audio segments for aligning
+        Prepare transcript and audio segments for aligning.
+
         """
+
         self.load_transcript(self.transcript_path)
-        
         self.extract_audio_all()
-        print("Extracting audio done")
        
-        print('Total number of segments: %d' % self.num_seg)
-    
     
     def run(self):
         """
-        Entrance for solving transcript-audio alignment
+        Entrypoint for solving transcript-audio alignment.
+
         """
         
         self.prepare_input()
-        
         self.extract_transcript_all()
         
-        # First: run without estimating the shift
-        print("Starting alignment without estimating shift...")
-        print('')
-        pool = multiprocessing.Pool(self.num_thread)
-        result_all = pool.map(self.align_segment_thread, [i for i in range(self.num_seg)])
-           
+        with Pool(self.num_thread) as workers, tqdm(total=self.num_seg,
+            desc='Aligning captions without estimating shift',
+            unit='segment'
+        ) as pbar:
+            results = [
+                workers.apply_async(
+                    self.align_segment_thread,
+                    args=(i,),
+                    callback=lambda x: pbar.update()
+                ) for i in range(self.num_seg)
+            ]
+
+            workers.close()
+            workers.join()
+        
+        result_all = [r.get() for r in results]
+
         align_word_list = []
         num_word_aligned = 0
         for seg_idx, seg in enumerate(result_all):
@@ -379,18 +442,28 @@ class TranscriptAligner():
             num_word_aligned += seg['num_word_aligned']
         
         missing_rate = 1 - 1. * num_word_aligned / self.num_words
-        print("Missing word after first run: %.2f " % missing_rate)
         
         if self.estimate and missing_rate > self.missing_thresh:
-            print("Starting alignment with estimating shift...")
-            print('')
             self.shift_seg_list = self.estimate_shift_all()
-            print("Estimating shift done")
             self.extract_transcript_all(estimate=True)
 
             # Second: run with estimating the shift
-            pool = multiprocessing.Pool(self.num_thread)
-            result_all = pool.map(self.align_segment_thread, [i for i in range(self.num_seg)])
+            with Pool(self.num_thread) as workers, tqdm(total=self.num_seg,
+                desc='Aligning captions with estimating shift',
+                unit='segment'
+            ) as pbar:
+                results = [
+                    workers.apply_async(
+                        self.align_segment_thread,
+                        args=(i,),
+                        callback=lambda x: pbar.update()
+                    ) for i in range(self.num_seg)
+                ]
+
+                workers.close()
+                workers.join()
+            
+            result_all = [r.get() for r in results]
 
             align_word_list = []
             num_word_aligned = 0
@@ -398,16 +471,10 @@ class TranscriptAligner():
                 align_word_list += [word for word in seg['align_word_list']]
                 num_word_aligned += seg['num_word_aligned']
                 
-        print('num_word_total: ', self.num_words)
-        print('num_word_aligned: ', num_word_aligned)
-        print('word_missing by total words: ', 1 - 1. * num_word_aligned / self.num_words)
-        print('word_missing by total aligned: ', 1 - 1. * num_word_aligned / len(align_word_list))
-        
         if not self.align_dir is None:
-            output_path = os.path.join(self.align_dir, self.video_name + '.word.srt')
+            output_path = os.path.join(self.align_dir, FILE_CAPTIONS)
             self.dump_aligned_transcript_byword(align_word_list, output_path)
-#             output_path = os.path.join(self.align_dir, self.video_name + '.align.srt')
-#             self.dump_aligned_transcript(align_word_list, output_path)
+
         return {'word_missing': 1 - 1. * num_word_aligned / self.num_words}    
    
     
@@ -453,53 +520,51 @@ class TranscriptAligner():
             srt_idx += 1
         outfile.close()  
 
-        
-if __name__ == "__main__":
-    output_dir='/app/data/subs/aligned_kdd_first'
-    transcript_dir = '/app/data/subs/subs_kdd/'
-    video_dir = '/app/data/videos/'
-    google_storage_dir = 'gs://esper/tvnews/videos/'
-    result_pkl = '/app/result/aligned_kdd_first.pkl'
-    
-    video_list = open('/app/data/video_list_kdd2.txt', 'r').read().split('\n')[:-1]
-    
-    if os.path.exists(result_pkl):
-        res_stats = pickle.load(open(result_pkl, 'rb'))
-    else:
-        res_stats = {}
-    for video_name in video_list:
-        print(video_name)
-        if video_name in res_stats:
-            continue
-            
-        video_path = os.path.join(video_dir, video_name + '.mp4')
-        transcript_path=os.path.join(transcript_dir, video_name)
-        
-        # Download video to local
-        if not os.path.exists(video_path):
-            gs_path = os.path.join(google_storage_dir, video_name + '.mp4')
-            cmd = 'gsutil cp ' + gs_path + ' ' + video_dir
-            print(cmd)
-            os.system(cmd)
-            print('Downloading video done')
-        else:
-            print('Video exists!')
-        
-        start_time = time.time()
-        
-        aligner = TranscriptAligner(win_size=300, seg_length=60, max_misalign=10, num_thread=64, estimate=True, missing_thresh=0.2,
-                        media_path=video_path,
-                        transcript_path=transcript_path,
-                        align_dir=output_dir)
-        
-        # First attempt 
-        res = aligner.run()
-        res_stats[video_name] = res
-        print('Alignment finished in %f s' % (time.time() - start_time))
-        
-        # Delete video
-        cmd = 'rm ' + video_path
-        os.system(cmd)
-        print('Delete video done')
 
-        pickle.dump(res_stats, open(result_pkl, 'wb'))
+def main(video_in_path, transcript_in_path, out_path, force=False):
+    if video_in_path.endswith('.mp4') and transcript_in_path.endswith('.srt'):
+        video_paths = [video_in_path]
+        transcript_paths = [transcript_in_path]
+    else:
+        video_paths = [
+            l.strip() for l in open(video_in_path, 'r') if l.strip()
+        ]
+        transcript_paths = [
+            l.strip() for l in open(transcript_in_path, 'r') if l.strip()
+        ]
+    
+    assert len(video_paths) == len(transcript_paths), \
+           'There was a mismatch between the number of videos and transcripts.'
+
+    video_paths = sorted(video_paths, key=get_base_name)
+    transcript_paths = sorted(transcript_paths, key=get_base_name)
+
+    video_names = [get_base_name(p) for p in video_paths]
+
+    assert all(get_base_name(t) == video_names[i]
+               for i, t in enumerate(transcript_paths)), \
+           'There was a mismatch between videos and transcript names.'
+
+    out_paths = [os.path.join(out_path, name) for name in video_names]
+
+    for p in out_paths:
+        os.makedirs(p, exist_ok=True)
+
+    for i in range(len(video_names)):
+        if not force and os.path.exists(os.path.join(out_paths[i],
+                                                     FILE_CAPTIONS)):
+            print("Skipping aligning captions for video '{}': captions file " \
+                  "already exists!".format(
+                  video_names[i]))
+            continue
+        
+        print("Aligning captions for video '{}'".format(video_names[i]))
+
+        aligner = TranscriptAligner(win_size=300, seg_length=60,
+            max_misalign=10, num_thread=64, estimate=True, missing_thresh=0.2,
+            media_path=video_paths[i],
+            transcript_path=transcript_paths[i],
+            align_dir=out_paths[i])
+
+        stats = aligner.run()
+        save_json(stats, os.path.join(out_paths[i], FILE_ALIGNMENT_STATS))
