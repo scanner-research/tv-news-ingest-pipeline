@@ -8,6 +8,7 @@ Contains constants used across the entire pipeline.
 FILE_BBOXES = 'bboxes.json'
 FILE_EMBEDS = 'embeddings.json'
 FILE_BLACK_FRAMES = 'black_frames.json'
+FILE_COMMERCIALS = 'commercials.json'
 FILE_METADATA = 'metadata.json'
 FILE_GENDERS = 'genders.json'
 FILE_IDENTITIES = 'identities.json'
@@ -36,4 +37,3 @@ worker_port = "5002"
 master = "localhost"
 master_port = "5001"
 """
-

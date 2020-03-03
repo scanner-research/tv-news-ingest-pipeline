@@ -14,12 +14,14 @@ from subprocess import check_call
 import tempfile
 from typing import NamedTuple, List, Tuple
 
-from rs_intervalset.writer import IntervalListMappingWriter
+from rs_intervalset.writer import (
+    IntervalListMappingWriter, IntervalSetMappingWriter)
 
 from util.consts import (FILE_BBOXES,
                          FILE_METADATA,
                          FILE_GENDERS,
                          FILE_CAPTIONS,
+                         FILE_COMMERCIALS,
                          FILE_IDENTITIES_PROP)
 from util.utils import load_json, save_json
 
@@ -75,10 +77,14 @@ def main(in_path, out_path, force, face_sample_rate):
               get_out_path('videos.json'))
 
     # Task 2: Write commercials intervals file
-    #
-    # FIXME: Currently empty since commercials are not detected
     print('Saving commercial intervals')
-    Path(get_out_path('commercials.iset.bin')).touch()
+    with IntervalSetMappingWriter(
+        get_out_path('commercials.iset.bin')
+    ) as writer:
+        for video in videos:
+            comm_intervals = get_commercial_intervals(in_path, video)
+            if comm_intervals:
+                writer.write(video.id, comm_intervals)
 
     # Task 3: Write out identitity metadata file
     #
@@ -200,6 +206,21 @@ def get_video_metadata(video: Video) -> Tuple:
     )
 
 
+def get_commercial_intervals(video_dir: str, video: Video):
+    fpath = os.path.join(video_dir, video.name, FILE_COMMERCIALS)
+    if not os.path.exists(fpath):
+        return None
+
+    def format_commercial(interval):
+        start_ms = int(interval[0] / video.fps * 1000)
+        end_ms = int(interval[1] / video.fps * 1000)
+        return (start_ms, end_ms)
+
+    with open(fpath) as fp:
+        commercials = json.load(fp)
+        return [format_commercial(c) for c in commercials]
+
+
 def get_face_intervals(video_dir: str, video: Video, face_sample_rate: int):
 
     def load_file(name: str, optional: bool = False):
@@ -293,7 +314,6 @@ def collect_caption_files(video_dir: str, videos: List[Video]):
         dst_path = os.path.join(tmp_dir, '{}.srt'.format(video.name))
         shutil.copyfile(src_path, dst_path)
     return tmp_dir
-
 
 
 if __name__ == '__main__':
