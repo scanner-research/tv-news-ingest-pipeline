@@ -41,26 +41,47 @@ def get_args():
                         help='path to directory of ingest pipeline outputs.')
     parser.add_argument('out_path',
                         help='path todirectory to output results to.')
-    parser.add_argument('-f', '--force', action='store_true',
-                        help='Overwrite existing output files.')
+
+    overwrite_behavior = parser.add_mutually_exclusive_group()
+    overwrite_behavior.add_argument(
+        '-o', '--overwrite', action='store_true',
+        help='Overwrite existing output files.')
+    overwrite_behavior.add_argument(
+        '-u', '--update', action='store_true',
+        help='Update existing files in place.')
+
     parser.add_argument('--face-sample-rate', type=int, default=1,
                         help='Number of samples per second')
     return parser.parse_args()
 
 
-def main(in_path, out_path, force, face_sample_rate):
+def main(in_path, out_path, overwrite, update, face_sample_rate):
     if os.path.exists(out_path):
-        if force:
+        if overwrite:
             shutil.rmtree(out_path)
-        else:
+        elif not update:
             raise FileExistsError('Output directory exists: {}'.format(out_path))
+    elif update:
+        raise FileNotFoundError('No existing files to update: {}'.format(out_path))
     os.makedirs(out_path)
-
-    videos = load_videos(in_path)
-    print('Found data for {} videos'.format(len(videos)))
 
     def get_out_path(*args):
         return os.path.join(out_path, *args)
+
+    new_videos = load_videos(in_path)
+    print('Found data for {} videos'.format(len(new_videos)))
+
+    if update:
+        all_videos = load_existing_video_metadata(get_out_path('videos.json'))
+
+        # Re-id the new videos
+        next_video_id = max(v.id for v in all_videos) + 1
+        print('Starting video ids from', next_video_id)
+        new_videos = [v._replace(id=id + next_video_id) for v in all_videos]
+        all_videos.extend(new_videos)
+    else:
+        print('Starting video ids from 0')
+        all_videos = new_videos
 
     # Task 1: Write out video metadata file
     #
@@ -73,15 +94,15 @@ def main(in_path, out_path, force, face_sample_rate):
     #     ...
     # ]
     print('Saving video metadata')
-    save_json([get_video_metadata(v) for v in videos],
-              get_out_path('videos.json'))
+    save_json([get_video_metadata(v) for v in all_videos],
+               get_out_path('videos.json'))
 
     # Task 2: Write commercials intervals file
     print('Saving commercial intervals')
     with IntervalSetMappingWriter(
-        get_out_path('commercials.iset.bin')
+        get_out_path('commercials.iset.bin'), append=update
     ) as writer:
-        for video in videos:
+        for video in new_videos:
             comm_intervals = get_commercial_intervals(in_path, video)
             if comm_intervals:
                 writer.write(video.id, comm_intervals)
@@ -93,7 +114,7 @@ def main(in_path, out_path, force, face_sample_rate):
     #     "<person name>": ["journalist", "politician", ...],
     #     ...
     # }
-    # FIXME: this is an empty dictionary for now
+    # FIXME: this is an empty dictionary for now (no updates supported either)
     print('Saving person metadata')
     save_json({}, get_out_path('people.metadata.json'))
 
@@ -104,7 +125,7 @@ def main(in_path, out_path, force, face_sample_rate):
     print('Saving face bounding boxes')
     face_bbox_dir = get_out_path('face-bboxes')
     os.makedirs(face_bbox_dir)
-    for video in videos:
+    for video in new_videos:
         try:
             save_json(
                 format_bbox_file_data(in_path, video, face_sample_rate),
@@ -121,23 +142,28 @@ def main(in_path, out_path, force, face_sample_rate):
     person_ilist_writers = {}
     with IntervalListMappingWriter(
         get_out_path('faces.ilist.bin'),
-        1   # 1 byte of binary payload
+        1,   # 1 byte of binary payload
+        append=update
     ) as writer:
-        for video in videos:
+        for video in new_videos:
             all_face_intervals, person_face_intervals = get_face_intervals(
                 in_path, video, face_sample_rate)
             if len(all_face_intervals) > 0:
                 writer.write(video.id, all_face_intervals)
             for person_name, person_intervals in person_face_intervals.items():
                 if person_name not in person_ilist_writers:
+                    person_ilist_path = os.path.join(
+                        people_ilist_dir, '{}.ilist.bin'.format(person_name))
+                    if update and not os.path.isfile(person_ilist_path):
+                        # Skip the person, since their file does not exist
+                        continue
                     person_ilist_writers[person_name] = IntervalListMappingWriter(
-                        os.path.join(
-                            people_ilist_dir,
-                            '{}.ilist.bin'.format(person_name)),
-                        1   # 1 byte of binary payload
+                        person_ilist_path,
+                        1,   # 1 byte of binary payload
+                        append=update
                     )
-                    person_ilist_writers[person_name].write(
-                        video.id, person_intervals)
+                person_ilist_writers[person_name].write(
+                    video.id, person_intervals)
     # Close all of the identity writers
     for writer in person_ilist_writers.values():
         writer.close()
@@ -147,19 +173,27 @@ def main(in_path, out_path, force, face_sample_rate):
     index_dir = get_out_path('index')
     tmp_dir = None
     try:
-        tmp_dir = collect_caption_files(in_path, videos)
-        check_call([
-            os.path.dirname(os.path.realpath(__file__))
-            + '/deps/caption-index/scripts/build_index.py',
-            tmp_dir,
-            '-o', index_dir
-        ])
+        tmp_dir = collect_caption_files(in_path, new_videos)
+        if update:
+            cmd = [
+                os.path.dirname(os.path.realpath(__file__))
+                + '/deps/caption-index/scripts/update_index.py',
+                '-d', tmp_dir,
+                index_dir
+            ]
+        else:
+            cmd = [
+                os.path.dirname(os.path.realpath(__file__))
+                + '/deps/caption-index/scripts/build_index.py',
+                '-d', tmp_dir,
+                '-o', index_dir
+            ]
+        check_call(cmd)
     finally:
         if tmp_dir and os.path.exists(tmp_dir):
             shutil.rmtree(tmp_dir)
 
     print('Done! Output written to: {}'.format(out_path))
-
 
 
 # Bit 0 is gender
@@ -183,6 +217,15 @@ def load_videos(video_dir: str):
             id=i, name=video_name, num_frames=meta_dict['frames'],
             fps=meta_dict['fps'], width=meta_dict['width'],
             height=meta_dict['height']))
+    return videos
+
+
+def load_existing_video_metadata(fpath: str):
+    videos = []
+    with open(fpath) as fp:
+        for v in json.load(fp):
+            vid, name, _, _, num_frames, fps, width, height = v
+            videos.append(Video(vid, name, num_frames, fps, width, height))
     return videos
 
 
