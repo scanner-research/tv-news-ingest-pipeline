@@ -61,6 +61,5 @@ def run_command_in_container(cmd, volumes=None, host=DEFAULT_HOST,
 
     shell_cmd += [service, cmd]
     shell_cmd = ' '.join(shell_cmd)
-    print(shell_cmd)
     subprocess.run(shell_cmd, check=True, shell=True)
     

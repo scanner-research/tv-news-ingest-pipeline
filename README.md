@@ -1,7 +1,7 @@
 # TV News Ingest Pipeline
 
 The TV News Ingest Pipeline is series of scripts designed to extract data and 
-metadata from videos (specifically broadcast news). Though pipeline is 
+metadata from videos (specifically broadcast news). Though the pipeline is 
 intended for use with the 
 [TV News Viewer](https://github.com/scanner-research/tv-news-viewer), where 
 this module extracts (and formats) the data for the viewer to load, it can 
@@ -21,6 +21,7 @@ directory in an easy to use structure and format.
 ## Table of Contents
 
    * [Getting Started](#getting-started)
+   * [Overview](#overview)
    * [Usage](#usage)
       * [Run on a Single Video](#run-on-a-single-video)
       * [Run on a Batch of Videos](#run-on-a-batch-of-videos)
@@ -37,6 +38,7 @@ directory in an easy to use structure and format.
       * [Gender Classification](#gender-classification)
       * [Copy Captions](#copy-captions)
       * [Time-Align Captions](#time-align-captions)
+      * [Commercial Detection](#commercial-detection)
    
 
 ## Getting Started
@@ -44,7 +46,7 @@ directory in an easy to use structure and format.
 Note: the TV News pipeline is only "officially" supported on Linux, however 
 advanced users can attempt to run it on MacOS (you'll likely need to 
 modify how things are installed and change the Docker host used with the 
-`--host` option [see [Useful Options](#useful-options) below]). 
+`--host` option. See [Useful Options](#useful-options) below). 
 
 1. Install Python3 (requires Python 3.5 or up)
 
@@ -78,6 +80,28 @@ modify how things are installed and change the Docker host used with the
    `config.yml` file (see [Configuration](#configuration)). Learn more at 
    https://docs.aws.amazon.com/rekognition/latest/dg/setting-up.html.
 
+
+## Overview
+
+As mentioned in the intro, the TV News Ingest Pipeline is a script that 
+systematically takes a collection of videos (and video captions) through 
+various analyses that take place in separate components. The output of the 
+pipeline are the outputs of each component (images, JSON files, srt files) 
+in an organized and easy to use format. These files can be used however you'd 
+like, but scripts are included in this repo to turn these outputs into the 
+data necessary to power the TV News Viewer (again, read 
+[TVNEWS_VIEWER_README.md](docs/TVNEWS_VIEWER_README.md) for more information).
+
+In order to easily take the videos through each stage of the pipeline, the 
+output directory is used to communicate the videos that are being processed and 
+which stages have been completed. For this reason, **it is very important that 
+you don't place any other files or folders in the output directory that are not 
+created by the pipeline**, as this may affect results. Further, it is 
+recommended that a new output directory be specified for each batch of videos 
+(by "new", we mean empty).
+
+For a more visual overview of what the pipeline does check out our
+[flowchart](docs/tv-news-flowchart.pdf).
 
 ## Usage
 
@@ -258,6 +282,11 @@ repo [here](#examples/config.yml). The current configuration options are:
 
 
 ## Components
+Here we describe the components in some detail. Not all components will be 
+relevant for your use case, so be sure to disable what you don't need. 
+Additionally users are encouraged to write their own components that provide 
+the same or similar interface to the existing components (it is not difficult 
+to figure out how to add your own if you look in [pipeline.py](pipeline.py)).
 
 ### Scanner Component
 The scanner component consists of face detection, computing FaceNet embeddings, 
@@ -345,3 +374,13 @@ the captions and the video's audio to give more accurate infomation about when
 each word occurs in the video. It outputs the aligned captions file as 
 `captions.srt`, which is just like any other srt file, but with one word per 
 line. Be aware that this component can take a long time to run.
+
+
+### Commercial Detection
+This component detects commercials through a combination of black frames 
+locations and caption details. This will not work for all videos, but for 
+our use case we have found that black frames occur before commercials, and the 
+captions tend to be non-existent during the commercials. It outputs a list of 
+intervals during which there are expected to be commercials, as
+`commercials.json`. Each interval in the list is simply a tuple of the start 
+and end frame of the commercial.

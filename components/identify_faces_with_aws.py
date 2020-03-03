@@ -36,7 +36,6 @@ import os
 from PIL import Image, ImageDraw
 import time
 
-import tqdm
 from tqdm import tqdm
 import boto3
 

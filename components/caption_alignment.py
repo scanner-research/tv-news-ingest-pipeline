@@ -391,7 +391,7 @@ class TranscriptAligner():
             workers.close()
             workers.join()
         
-        shift_window_list = [r.get() for f in results]
+        shift_window_list = [r.get() for r in results]
         shift_seg_list = []
         for shift in shift_window_list:
             shift_seg_list += [shift] * (self.win_size // self.seg_length)

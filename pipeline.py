@@ -36,6 +36,7 @@ Sample output directory after pipeline completion:
     │   ├── metadata.json
     │   ├── captions.srt
     │   ├── captions_orig.srt
+    │   ├── commercials.json
     │   └── crops
     │       ├── 0.png
     │       └── 1.png
@@ -59,15 +60,14 @@ from tqdm import tqdm
 from components import (classify_gender,
                         identify_faces_with_aws,
                         identity_propogation,
-                        caption_alignment)
+                        caption_alignment,
+                        commercial_detection)
 from util.consts import FILE_CAPTIONS_ORIG
-from util.docker_compose_api import (container_up,
-                                     container_down,
-                                     pull_container,
+from util.docker_compose_api import (pull_container,
                                      run_command_in_container,
                                      DEFAULT_HOST,
                                      DEFAULT_SERVICE)
-from util.utils import get_base_name, update_pbar
+from util.utils import get_base_name
 
 NAMED_COMPONENTS = [
     'face_detection',   # <
@@ -79,7 +79,8 @@ NAMED_COMPONENTS = [
     'identity_propogation',
     'genders',
     'captions_copy',
-    'caption_alignment'
+    'caption_alignment', 
+    'commercials'
 ]
 
 
@@ -152,8 +153,8 @@ def main(in_path, captions, out_path, host=DEFAULT_HOST,
             or (not script and 'identity_propogation' not in disable):
         identity_propogation.main(out_path, out_path, force=force)
 
-    if (script and script == 'genders') or \
-            (not script and 'genders' not in disable):
+    if (script and script == 'genders') \
+            or (not script and 'genders' not in disable):
         classify_gender.main(out_path, out_path, force=force)
 
     if captions is not None:
@@ -164,6 +165,10 @@ def main(in_path, captions, out_path, host=DEFAULT_HOST,
         if (script and script == 'caption_alignment') \
                 or (not script and 'caption_alignment' not in disable):
             caption_alignment.main(in_path, captions, out_path, force=force)
+
+    if (script and script == 'commercials') \
+            or (not script and 'commercials' not in disable):
+        commercial_detection.main(out_path, out_path, force=force)
 
     if not script:
         end = time.time()
