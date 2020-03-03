@@ -133,6 +133,7 @@ output_dir/
     ├── black_frames.json           # black frame locations
     ├── captions.srt                # time-aligned captions
     ├── captions_orig.srt           # original captions (copied over)
+    ├── commercials.json            # detected commercial intervals
     ├── crops                       # cropped images of each face
     │   ├── 0.png
     │   ├── 1.png
