@@ -231,6 +231,8 @@ Currently, the components that can be disabled are:
 
 * `caption_alignment` (skips time-aligning the video captions)
 
+* `commercials` (skips detecting commercials)
+
 If you wanted to skip extracting face crops and detecting black frames, for 
 instance, you would run 
 
