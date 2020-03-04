@@ -63,7 +63,8 @@ def main(in_path, out_path, overwrite, update, face_sample_rate):
             raise FileExistsError('Output directory exists: {}'.format(out_path))
     elif update:
         raise FileNotFoundError('No existing files to update: {}'.format(out_path))
-    os.makedirs(out_path)
+
+    os.makedirs(out_path, exist_ok=update)
 
     def get_out_path(*args):
         return os.path.join(out_path, *args)
@@ -77,7 +78,7 @@ def main(in_path, out_path, overwrite, update, face_sample_rate):
         # Re-id the new videos
         next_video_id = max(v.id for v in all_videos) + 1
         print('Starting video ids from', next_video_id)
-        new_videos = [v._replace(id=id + next_video_id) for v in all_videos]
+        new_videos = [v._replace(id=v.id + next_video_id) for v in new_videos]
         all_videos.extend(new_videos)
     else:
         print('Starting video ids from 0')
@@ -124,7 +125,7 @@ def main(in_path, out_path, overwrite, update, face_sample_rate):
     # gender and identity.
     print('Saving face bounding boxes')
     face_bbox_dir = get_out_path('face-bboxes')
-    os.makedirs(face_bbox_dir)
+    os.makedirs(face_bbox_dir, exist_ok=update)
     for video in new_videos:
         try:
             save_json(
@@ -138,7 +139,7 @@ def main(in_path, out_path, overwrite, update, face_sample_rate):
     # files for identities
     print('Saving face intervals')
     people_ilist_dir = get_out_path('people')
-    os.makedirs(people_ilist_dir)
+    os.makedirs(people_ilist_dir, exist_ok=update)
     person_ilist_writers = {}
     with IntervalListMappingWriter(
         get_out_path('faces.ilist.bin'),
@@ -146,6 +147,7 @@ def main(in_path, out_path, overwrite, update, face_sample_rate):
         append=update
     ) as writer:
         for video in new_videos:
+            print(in_path, video)
             all_face_intervals, person_face_intervals = get_face_intervals(
                 in_path, video, face_sample_rate)
             if len(all_face_intervals) > 0:
