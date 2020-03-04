@@ -116,8 +116,9 @@ def main(in_path, out_path, overwrite, update, face_sample_rate):
     #     ...
     # }
     # FIXME: this is an empty dictionary for now (no updates supported either)
-    print('Saving person metadata')
-    save_json({}, get_out_path('people.metadata.json'))
+    if not update:
+        print('Saving person metadata')
+        save_json({}, get_out_path('people.metadata.json'))
 
     # Task 4: Write out face bounding boxes
     #
@@ -147,7 +148,6 @@ def main(in_path, out_path, overwrite, update, face_sample_rate):
         append=update
     ) as writer:
         for video in new_videos:
-            print(in_path, video)
             all_face_intervals, person_face_intervals = get_face_intervals(
                 in_path, video, face_sample_rate)
             if len(all_face_intervals) > 0:
@@ -156,13 +156,14 @@ def main(in_path, out_path, overwrite, update, face_sample_rate):
                 if person_name not in person_ilist_writers:
                     person_ilist_path = os.path.join(
                         people_ilist_dir, '{}.ilist.bin'.format(person_name))
+                    append=update
                     if update and not os.path.isfile(person_ilist_path):
-                        # Skip the person, since their file does not exist
-                        continue
+                        append=False
+
                     person_ilist_writers[person_name] = IntervalListMappingWriter(
                         person_ilist_path,
                         1,   # 1 byte of binary payload
-                        append=update
+                        append=append
                     )
                 person_ilist_writers[person_name].write(
                     video.id, person_intervals)
@@ -302,6 +303,7 @@ def get_face_intervals(video_dir: str, video: Video, face_sample_rate: int):
         identity = identities.get(face_id)
         if identity:
             person_face_intervals[identity].append(face_interval)
+
     return face_intervals, person_face_intervals
 
 
@@ -345,7 +347,7 @@ def format_bbox_file_data(video_dir: str, video: Video, face_sample_rate: int):
             if gender:
                 face_bbox['g'] = gender.lower()
         if identities:
-            identity = identity_to_id.get(face_id)
+            identity = identities.get(face_id)
             if identity:
                 face_bbox['i'] = identity_to_id[identity]
         face_bboxes.append(face_bbox)
