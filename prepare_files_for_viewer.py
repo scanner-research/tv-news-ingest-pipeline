@@ -199,9 +199,9 @@ def main(in_path, out_path, overwrite, update, face_sample_rate):
     print('Done! Output written to: {}'.format(out_path))
 
 
-# Bit 0 is gender
-# Bit 1 is host
-# Bits 2-7 are face height
+# Bits 0-1 are gender
+# Bit 2 is host
+# Bits 3-7 are face height
 def encode_face_interval_payload(gender, is_host, height):
     ret = 0
     ret |= gender
@@ -213,7 +213,8 @@ def encode_face_interval_payload(gender, is_host, height):
 
 def load_videos(video_dir: str):
     videos = []
-    for i, video_name in enumerate(os.listdir(video_dir)):
+    # Start video IDs at 1 to ensure the ID passes boolean check
+    for i, video_name in enumerate(os.listdir(video_dir), 1):
         meta_path = os.path.join(video_dir, video_name, FILE_METADATA)
         meta_dict = load_json(meta_path)
         videos.append(Video(
@@ -326,9 +327,10 @@ def format_bbox_file_data(video_dir: str, video: Video, face_sample_rate: int):
         a: b
         for a, b, _ in load_file(FILE_IDENTITIES_PROP,  optional=True)
     }
+    # person IDs start at 1 to ensure ID passes any boolean check
     identity_to_id = {
         x: i
-        for i, x in enumerate(sorted({x for x in identities.values()}))
+        for i, x in enumerate(sorted({x for x in identities.values()}), 1)
     }
     face_bboxes = []
     for face_id, face_meta in load_file(FILE_BBOXES):
