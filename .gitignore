@@ -8,3 +8,4 @@ db_name
 debug/
 */**/__pycache__/
 -examples/*
+-examples/**/*.mp4
