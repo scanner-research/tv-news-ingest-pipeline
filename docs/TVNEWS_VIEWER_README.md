@@ -4,7 +4,7 @@ Assuming everything went well and the metadata has been extracted, we will now
 load the data into a form that the TV news viewer can understand.
 
 Note: the viewer assumes files are named with the following format
-`CHANNEL_YYYYMMDD_hhmmss_SHOW`.
+`CHANNEL_YYYYMMDD_hhmmss_SHOW.mp4`.
 
 ## Getting the viewer code
 
