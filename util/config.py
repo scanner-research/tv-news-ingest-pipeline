@@ -20,6 +20,8 @@ CONFIG_KEYS = {
     'montage_height': 6,
     'aws_access_key_id': None,
     'aws_secret_access_key': None,
+    'disable': [],
+    'host': '127.0.0.1:2375'
 }
 
 # Set config variables defaults

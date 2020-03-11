@@ -63,6 +63,7 @@ import time
 
 from tqdm import tqdm
 
+from util import config
 from util.consts import FILE_CAPTIONS_ORIG
 from util.docker_compose_api import (pull_container,
                                      run_command_in_container,
@@ -96,8 +97,7 @@ def get_args():
     parser.add_argument('--captions', help=('path to srt or to a text file '
                                             'containing srt filepaths'))
     parser.add_argument('out_path', help='path to output directory')
-    parser.add_argument('--host', type=str, default=DEFAULT_HOST, 
-                        help='docker host IP:port')
+    parser.add_argument('--host', help='docker host IP:port')
     parser.add_argument('--service', type=str, default=DEFAULT_SERVICE,
                         help='docker compose service for scanner',
                         choices=['cpu', 'gpu'])
@@ -112,14 +112,18 @@ def get_args():
     return parser.parse_args()
 
 
-def main(in_path, captions, out_path, host=DEFAULT_HOST,
+def main(in_path, captions, out_path, host,
          service=DEFAULT_SERVICE, init_run=False, force=False,
          disable=None, script=None):
 
     start = time.time()
-
+    
+    # Configuration settings
     if disable is None:
-        disable = []
+        disable = config.DISABLE if config.DISABLE else []
+
+    if host is None:
+        host = config.HOST
 
     # Validate file formats
     single = not in_path.endswith('.txt') and not os.path.isdir(in_path)

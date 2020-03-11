@@ -1,5 +1,21 @@
 # This is a sample configuration file
 
+# disable:
+#   - face_detection
+#   - face_embeddings
+#   - face_crops
+#   - scanner_component
+#   - black_frames
+#   - identities
+#   - identity_propogation
+#   - genders
+#   - captions_copy
+#   - caption_alignment
+#   - commercials
+
+# Docker-compose options
+# host: 127.0.0.1:2375
+
 # Scanner component options
 # num_pipelines: 8
 # stride: 3
@@ -9,3 +25,4 @@
 # montage_height: 6
 # aws_access_key_id: KEY_ID GOES HERE
 # aws_secret_access_key: SECRET_KEY GOES HERE
+
