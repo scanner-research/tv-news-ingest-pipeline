@@ -17,9 +17,15 @@ script takes the video(s) through the following stages:
 
     - face identification (identify_faces_with_aws.py)
 
+    - propogate identities to unlabeled faces (identity_propogation.py)
+
     - gender classification (classify_gender.py)
 
-    - copies captions
+    - copies original captions
+
+    - time aligns captions (caption_alignment.py)
+
+    - detects commercials (commercial_detection.py)
 
 
 Sample output directory after pipeline completion:
@@ -57,11 +63,6 @@ import time
 
 from tqdm import tqdm
 
-from components import (classify_gender,
-                        identify_faces_with_aws,
-                        identity_propogation,
-                        caption_alignment,
-                        commercial_detection)
 from util.consts import FILE_CAPTIONS_ORIG
 from util.docker_compose_api import (pull_container,
                                      run_command_in_container,
@@ -147,14 +148,17 @@ def main(in_path, captions, out_path, host=DEFAULT_HOST,
 
     if (script and script == 'identities') \
             or (not script and 'identities' not in disable):
+        from components import identify_faces_with_aws
         identify_faces_with_aws.main(out_path, out_path, force=force)
 
     if (script and script == 'identity_propogation') \
             or (not script and 'identity_propogation' not in disable):
+        from components import identity_propogation
         identity_propogation.main(out_path, out_path, force=force)
 
     if (script and script == 'genders') \
             or (not script and 'genders' not in disable):
+        from components import classify_gender 
         classify_gender.main(out_path, out_path, force=force)
 
     if captions is not None:
@@ -164,10 +168,12 @@ def main(in_path, captions, out_path, host=DEFAULT_HOST,
 
         if (script and script == 'caption_alignment') \
                 or (not script and 'caption_alignment' not in disable):
+            from components import caption_alignment
             caption_alignment.main(in_path, captions, out_path, force=force)
 
     if (script and script == 'commercials') \
             or (not script and 'commercials' not in disable):
+        from components import commercial_detection
         commercial_detection.main(out_path, out_path, force=force)
 
     if not script:

@@ -44,7 +44,7 @@ def exec_command_in_container(cmd, host=DEFAULT_HOST, service=DEFAULT_SERVICE):
 
 def run_command_in_container(cmd, volumes=None, host=DEFAULT_HOST, 
                              service=DEFAULT_SERVICE):
-    shell_cmd = ['docker-compose', '--host', host, 'run']
+    shell_cmd = ['docker-compose', '--host', '"{}"'.format(host), 'run']
     
     volumes_to_add = []
     cwd = Path.cwd().resolve()
