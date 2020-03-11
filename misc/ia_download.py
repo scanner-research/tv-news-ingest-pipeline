@@ -9,6 +9,7 @@ import shutil
 import datetime
 import subprocess
 from subprocess import check_output, check_call
+import subprocess
 from tqdm import tqdm
 from multiprocessing import Pool
 
@@ -102,7 +103,18 @@ def main(year, local_out_path, list_file, gcs_video_path, gcs_caption_path, num_
     print('Listing available videos')
     available = list_ia_videos(year)
 
-    to_download = [x for x in available if x not in downloaded]
+    # Exclude videos we have already downloaded and videos which have no available mp4
+    to_download = []
+    for video in available:
+        if video in downloaded:
+            continue 
+        # This prints results directly to the terminal
+        status = subprocess.call(['ia', 'list', video, '--glob=*.mp4'])
+        # If there is no video, the list will return a nonzero status
+        if status == 0:
+            to_download.append(video)
+
+
     if list_file:
         with open(list_file, 'w') as f:
             for identifier in to_download:
