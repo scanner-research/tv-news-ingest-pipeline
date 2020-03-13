@@ -10,10 +10,10 @@ Example
 
     in_path:  output_dir
     out_path: output_dir
-        
+
     where 'output_dir' contains video output subdirectories
 
-    outputs 
+    outputs
 
         output_dir/
         ├── video1
@@ -34,8 +34,8 @@ from sklearn.neighbors import KNeighborsClassifier
 from util.utils import save_json, load_json, get_base_name
 from util.consts import FILE_EMBEDS, FILE_GENDERS
 
-GENDER_TRAIN_X_FILE = 'gender_model/train_X.npy'
-GENDER_TRAIN_Y_FILE = 'gender_model/train_y.npy'
+GENDER_TRAIN_X_FILE = 'components/gender_model/train_X.npy'
+GENDER_TRAIN_Y_FILE = 'components/gender_model/train_y.npy'
 KNN_K = 7
 
 train_X = np.load(GENDER_TRAIN_X_FILE)
@@ -58,10 +58,10 @@ def get_args():
 def main(in_path, out_path, force=False):
     video_names = list(os.listdir(in_path))
     out_paths = [os.path.join(out_path, name) for name in video_names]
-    
+
     for p in out_paths:
         os.makedirs(p, exist_ok=True)
-    
+
     with Pool() as workers, tqdm(
         total=len(video_names), desc='Classifying genders', unit='video'
     ) as pbar:
@@ -74,7 +74,7 @@ def main(in_path, out_path, force=False):
                     args=(embeds_path, genders_outpath),
                     callback=lambda x: pbar.update())
             else:
-                tqdm.write("Skipping classifying gender for video '{}': '{}' " 
+                tqdm.write("Skipping classifying gender for video '{}': '{}' "
                       "already exists!".format(video_name, FILE_GENDERS))
                 pbar.update()
 

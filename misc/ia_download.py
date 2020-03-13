@@ -107,7 +107,7 @@ def main(year, local_out_path, list_file, gcs_video_path, gcs_caption_path, num_
     to_download = []
     for video in available:
         if video in downloaded:
-            continue 
+            continue
         # This prints results directly to the terminal
         status = subprocess.call(['ia', 'list', video, '--glob=*.mp4'])
         # If there is no video, the list will return a nonzero status

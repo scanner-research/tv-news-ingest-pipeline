@@ -5,7 +5,7 @@ File: pipeline.py
 -----------------
 This script is the interface to the TV-News video processing pipeline.
 
-Given a video filepath or textfile containing a list of video filepaths, this 
+Given a video filepath or textfile containing a list of video filepaths, this
 script takes the video(s) through the following stages:
 
     - scanner component (scanner_component.py)
@@ -48,7 +48,7 @@ Sample output directory after pipeline completion:
     │       └── 1.png
     ├── video2
     │   └── ...
-    └── ... 
+    └── ...
 
 """
 
@@ -81,7 +81,7 @@ NAMED_COMPONENTS = [
     'identity_propogation',
     'genders',
     'captions_copy',
-    'caption_alignment', 
+    'caption_alignment',
     'commercials'
 ]
 
@@ -117,7 +117,7 @@ def main(in_path, captions, out_path, host,
          disable=None, script=None):
 
     start = time.time()
-    
+
     # Configuration settings
     if disable is None:
         disable = config.DISABLE if config.DISABLE else []
@@ -138,13 +138,13 @@ def main(in_path, captions, out_path, host,
     print('Creating output directories at "{}"...'.format(out_path))
     video_paths, output_dirs = create_output_dirs(in_path, out_path, single)
     video_dirpaths = [str(Path(p).parent) for p in video_paths]
-    
+
     # Step through each pipeline component
     if (script and script == 'scanner_component') \
             or (not script and 'scanner_component' not in disable):
         run_scanner_component(in_path, out_path, video_dirpaths, disable,
                               init_run, force, host=host, service=service)
-  
+
     if (script and script == 'black_frames') \
             or (not script and 'black_frames' not in disable):
         run_black_frame_detection(in_path, out_path, video_dirpaths, init_run,
@@ -162,7 +162,7 @@ def main(in_path, captions, out_path, host,
 
     if (script and script == 'genders') \
             or (not script and 'genders' not in disable):
-        from components import classify_gender 
+        from components import classify_gender
         classify_gender.main(out_path, out_path, force=force)
 
     if captions is not None:
@@ -192,7 +192,7 @@ def create_output_dirs(in_path, out_path, single):
 
     Args:
         in_path (str): path to a video file or batch text file containing
-                       filepaths 
+                       filepaths
         out_path (str): path to the output directory.
 
     Returns:
@@ -214,18 +214,18 @@ def create_output_dirs(in_path, out_path, single):
 
 
 def run_scanner_component(in_path, out_path, video_dirpaths, disable=None,
-                          init_run=False, force_rerun=False, 
+                          init_run=False, force_rerun=False,
                           host=DEFAULT_HOST, service=DEFAULT_SERVICE):
     cmd = build_scanner_component_command(in_path, out_path, disable, init_run,
                                           force_rerun)
-    run_command_in_container(cmd, video_dirpaths, host, service)
+    run_command_in_container(cmd, in_path, out_path, video_dirpaths, host, service)
 
 
 def run_black_frame_detection(in_path, out_path, video_dirpaths, init_run=False,
         force_rerun=False, host=DEFAULT_HOST, service=DEFAULT_SERVICE):
     cmd = build_black_frame_detection_command(in_path, out_path, init_run,
                                               force_rerun)
-    run_command_in_container(cmd, video_dirpaths, host, service)
+    run_command_in_container(cmd, in_path, out_path, video_dirpaths, host, service)
 
 
 def prepare_docker_container(host=DEFAULT_HOST, service=DEFAULT_SERVICE):
@@ -283,7 +283,7 @@ def copy_captions(in_path, out_dir):
         out_paths = [os.path.join(out_dir, v, FILE_CAPTIONS_ORIG)
                      for v in video_names]
 
-    for captions, out_path in zip(tqdm(caption_paths, 
+    for captions, out_path in zip(tqdm(caption_paths,
         desc='Copying original captions', unit='video'), out_paths
     ):
         if not os.path.exists(out_path):
