@@ -239,7 +239,9 @@ def get_video_metadata(video: Video) -> Tuple:
     except ValueError:
         print("For the TV News Viewer, video names must follow the format "
               "'CHANNEL_YYYYMMDD_hhmmss_SHOW'. Exiting.")
-        exit()
+        #exit()
+        channel = video.name.split('_', 1)[0]
+        show = ''
 
     return (
         video.id,
