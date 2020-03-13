@@ -22,6 +22,7 @@ directory in an easy to use structure and format.
 
    * [Getting Started](#getting-started)
       * [Setting Up](#setting-up)
+      * [Quickstart with Examples](#quickstart-with-examples)
    * [Overview](#overview)
    * [Usage](#usage)
       * [Run on a Single Video](#run-on-a-single-video)
@@ -94,7 +95,8 @@ modify how things are installed and change the Docker host used with the
 I highly encourage you to read the rest of this document before getting started
 but this section will detail a simple use case on the sample videos we've
 provided. Those videos and their captions are located within the
-[examples](examples) directory.
+[examples](examples) directory, and are licensed by MSNBC under the
+Creative Commons Attribution license (reuse allowed).
 
 To begin, make sure you are in the root of the `tv-news-ingest-pipeline` repo.
 
@@ -351,6 +353,10 @@ repo [here](#examples/config.yml). The current configuration options are:
 * `aws_access_key_id`: your Amazon Rekognition access key ID.
 
 * `aws_secret_access_key`: your Amazon Rekognition secret access key.
+
+* `disable`: a list of the named components to disable.
+
+* `host`: the host that the Docker daemon is running on.
 
 
 ## Components
