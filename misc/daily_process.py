@@ -139,8 +139,7 @@ def download_unprocessed_videos(year, local_out_path, list_file, gcs_video_path,
     to_download = []
     for video in available:
         if video in downloaded:
-            #continue
-            pass # TODO: change back
+            continue
         # This prints results directly to the terminal
         status = subprocess.call(['ia', 'list', video, '--glob=*.mp4'])
         # If there is no video, the list will return a nonzero status
@@ -223,7 +222,7 @@ def list_ia_videos(year):
                 identifier = json.loads(line)['identifier']
                 if identifier.startswith(query_string):
                     identifiers.append(identifier)
-                    if len(identifiers) >1: return identifiers # TODO: DELETEME
+
     return identifiers
 
 def download_video_and_subs(identifier):
