@@ -59,9 +59,6 @@ from util.utils import (
     save_json
 )
 
-# Twice as manner for black frames as for face detection.
-NUM_PIPELINES = NUM_PIPELINES * 2
-
 
 def get_args():
     parser = argparse.ArgumentParser()

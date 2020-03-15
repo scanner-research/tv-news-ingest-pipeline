@@ -15,7 +15,7 @@ CONFIG_FILE = 'config.yml'
 
 CONFIG_KEYS = {
     'num_pipelines': (os.cpu_count() // 2 if os.cpu_count() else 1),
-    'stride': 3,
+    'stride': 1,
     'montage_width': 10,
     'montage_height': 6,
     'aws_access_key_id': None,

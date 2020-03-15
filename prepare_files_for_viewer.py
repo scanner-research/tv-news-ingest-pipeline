@@ -40,8 +40,11 @@ def get_args():
     parser.add_argument('in_path',
                         help='path to directory of ingest pipeline outputs.')
     parser.add_argument('out_path',
-                        help='path todirectory to output results to.')
-
+                        help='path to directory to output results to.')
+    parser.add_argument('--index-dir', help=('path to directory where the '
+                        'index should be located if different than out_path.'))
+    parser.add_argument('--bbox-dir', help=('path to directory where the face '
+                        'bboxes should be located if different than out_path'))
     overwrite_behavior = parser.add_mutually_exclusive_group()
     overwrite_behavior.add_argument(
         '-o', '--overwrite', action='store_true',
@@ -55,7 +58,8 @@ def get_args():
     return parser.parse_args()
 
 
-def main(in_path, out_path, overwrite, update, face_sample_rate):
+def main(in_path, out_path, index_dir, bbox_dir, overwrite, update,
+         face_sample_rate):
     if os.path.exists(out_path):
         if overwrite:
             shutil.rmtree(out_path)
@@ -125,7 +129,7 @@ def main(in_path, out_path, overwrite, update, face_sample_rate):
     # This is to render bounding boxes on the frames, with information such as
     # gender and identity.
     print('Saving face bounding boxes')
-    face_bbox_dir = get_out_path('face-bboxes')
+    face_bbox_dir = bbox_dir if bbox_dir else get_out_path('face-bboxes')
     os.makedirs(face_bbox_dir, exist_ok=update)
     for video in new_videos:
         try:
@@ -173,7 +177,7 @@ def main(in_path, out_path, overwrite, update, face_sample_rate):
 
     # Task 7: index the captions
     print('Indexing the captions')
-    index_dir = get_out_path('index')
+    index_dir = index_dir if index_dir else get_out_path('index')
     tmp_dir = None
     try:
         tmp_dir = collect_caption_files(in_path, new_videos)
