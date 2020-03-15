@@ -12,7 +12,8 @@ from multiprocessing import Pool
 
 GCS_OUTPUT_DIR = 'gs://esper/tvnews/ingest-pipeline/tmp'
 
-APP_DATA_PATH = 'data' # in tv-news-viewer
+APP_DATA_PATH = '../esper-tv-widget/data/'
+INDEX_PATH = '../esper-tv-widget/index'
 
 LOCAL_OUTPUT_PATH = '/tmp/pipeline_outputs'
 
@@ -22,21 +23,21 @@ PREFIXES = ['MSNBC', 'MSNBCW', 'CNN', 'CNNW', 'FOXNEWS', 'FOXNEWSW']
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('-y', dest='year', type=int, default=None,
-                        help=('The year for which to download videos. If not '
+                        help=('the year for which to download videos. If not '
                               'specified, defaults to year it was yesterday.'))
     parser.add_argument('--local-out-path', default=LOCAL_OUTPUT_PATH,
-                        help='Directory to save video outputs to')
+                        help='directory to save video outputs to')
     parser.add_argument('--gcs-output-path', default=GCS_OUTPUT_DIR,
                         help=('the pipeline output directory'))
     parser.add_argument('--num-processes', dest='num_processes', type=int,
-                        default=1, help=('The number of parallel workers to '
+                        default=1, help=('the number of parallel workers to '
                                          'run the downloads on.'))
     return parser.parse_args()
 
 
 def main(year, local_out_path, gcs_output_path, num_processes):
     download_unprepared_outputs(year, local_out_path, gcs_output_path, num_processes)
-    cmd = ['python3', 'prepare_files_for_viewer.py', '-u', LOCAL_OUTPUT_PATH, os.path.join('../tv-news-viewer', APP_DATA_PATH)]
+    cmd = ['python3', 'prepare_files_for_viewer.py', '-u', LOCAL_OUTPUT_PATH, APP_DATA_PATH, '--index-dir', INDEX_PATH]
     subprocess.check_call(cmd)
 
     shutil.rmtree(LOCAL_OUTPUT_PATH)
@@ -73,7 +74,7 @@ def download_pipeline_output(args):
 
 
 def list_processed_outputs():
-    with open(os.path.join('../tv-news-viewer', APP_DATA_PATH, 'videos.json'), 'r') as f:
+    with open(os.path.join(APP_DATA_PATH, 'videos.json'), 'r') as f:
         videos = json.load(f)
 
     videos = set(x[1] for x in videos)
