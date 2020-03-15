@@ -19,11 +19,13 @@ BATCH_VIDEOS_PATH = os.path.join(WORKING_DIR, 'batch_videos.txt')
 BATCH_CAPTIONS_PATH = os.path.join(WORKING_DIR, 'batch_captions.txt')
 PIPELINE_OUTPUT_DIR =  os.path.join(WORKING_DIR, 'pipeline_output')
 
-GCS_VIDEOS_DIR = 'gs://esper/tvnews/videos'
-GCS_CAPTIONS_DIR = 'gs://esper/tvnews/subs'
+GCS_VIDEOS_DIR = 'gs://esper/tvnews/videos_processed'
+GCS_CAPTIONS_DIR = 'gs://esper/tvnews/subs_processed'
 GCS_OUTPUT_DIR = 'gs://esper/tvnews/ingest-pipeline/tmp/'  # pipeline output goes here
 
 APP_DATA_PATH = 'data' # in tv-news-viewer
+
+MAX_VIDEO_DOWNLOADS = 100
 
 PREFIXES = ['MSNBC', 'MSNBCW', 'CNN', 'CNNW', 'FOXNEWS', 'FOXNEWSW']
 
@@ -33,8 +35,7 @@ def get_args():
                         help=('The year for which to download videos. If not '
                               'specified, defaults to year it was yesterday.'))
     parser.add_argument('--local-out-path', default=DOWNLOAD_DIR,
-                        help=('Directory to save videos and captions to. '
-                              'Defaults to the current working directory.'))
+                        help='Directory to save videos and captions to. ')
     parser.add_argument('--list', dest='list_file',
                         help='File to write the list of downloaded videos')
     parser.add_argument('--gcs-video-path', default=GCS_VIDEOS_DIR,
@@ -59,10 +60,6 @@ def main(year, local_out_path, list_file, gcs_video_path, gcs_caption_path,
 
     cmd = ['python3', 'pipeline.py', BATCH_VIDEOS_PATH, '--captions',
            BATCH_CAPTIONS_PATH, PIPELINE_OUTPUT_DIR]
-    subprocess.check_call(cmd)
-
-    cmd = ['python3', 'prepare_files_for_viewer.py', '-u', PIPELINE_OUTPUT_DIR,
-           os.path.join('../tv-news-viewer', APP_DATA_PATH)]
     subprocess.check_call(cmd)
 
     upload_all_pipeline_outputs_to_cloud(PIPELINE_OUTPUT_DIR, downloaded, num_processes, GCS_OUTPUT_DIR)
@@ -96,9 +93,11 @@ def upload_pipeline_output_to_cloud(args):
     if os.path.exists(identifier):
         # does not upload crops
         cmd = ['gsutil', 'cp', '-n', os.path.join(identifier, '*'), gcs_output_path]
+        print('COMMAND', cmd)
         subprocess.check_call(cmd)
 
-        cmd = ['sudo', 'rm', '-rf', 'identifier']
+        cmd = ['sudo', 'rm', '-rf', identifier]
+        print('COMMAND', cmd)
         subprocess.check_call(cmd)
 
 
@@ -145,6 +144,8 @@ def download_unprocessed_videos(year, local_out_path, list_file, gcs_video_path,
         # If there is no video, the list will return a nonzero status
         if status == 0:
             to_download.append(video)
+            if len(to_download) >= MAX_VIDEO_DOWNLOADS:
+                break
 
     if list_file:
         with open(list_file, 'w') as f:

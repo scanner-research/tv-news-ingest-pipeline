@@ -20,8 +20,10 @@ from rs_intervalset.writer import (
 from util.consts import (FILE_BBOXES,
                          FILE_METADATA,
                          FILE_GENDERS,
+                         FILE_CAPTIONS_ORIG,
                          FILE_CAPTIONS,
                          FILE_COMMERCIALS,
+                         FILE_IDENTITIES,
                          FILE_IDENTITIES_PROP)
 from util.utils import load_json, save_json
 
@@ -159,7 +161,7 @@ def main(in_path, out_path, index_dir, bbox_dir, overwrite, update,
             for person_name, person_intervals in person_face_intervals.items():
                 if person_name not in person_ilist_writers:
                     person_ilist_path = os.path.join(
-                        people_ilist_dir, '{}.ilist.bin'.format(person_name))
+                        people_ilist_dir, '{}.ilist.bin'.format(person_name.lower()))
                     append=update
                     if update and not os.path.isfile(person_ilist_path):
                         append=False
@@ -181,21 +183,26 @@ def main(in_path, out_path, index_dir, bbox_dir, overwrite, update,
     tmp_dir = None
     try:
         tmp_dir = collect_caption_files(in_path, new_videos)
-        if update:
-            cmd = [
-                os.path.dirname(os.path.realpath(__file__))
-                + '/deps/caption-index/scripts/update_index.py',
-                '-d', tmp_dir,
-                index_dir
-            ]
+        if len(os.listdir(tmp_dir)) == 0:
+            print('No captions files exist!')
+
         else:
-            cmd = [
-                os.path.dirname(os.path.realpath(__file__))
-                + '/deps/caption-index/scripts/build_index.py',
-                '-d', tmp_dir,
-                '-o', index_dir
-            ]
-        check_call(cmd)
+            if update:
+                cmd = [
+                    os.path.dirname(os.path.realpath(__file__))
+                    + '/deps/caption-index/scripts/update_index.py',
+                    '-d', tmp_dir,
+                    index_dir
+                ]
+            else:
+                cmd = [
+                    os.path.dirname(os.path.realpath(__file__))
+                    + '/deps/caption-index/scripts/build_index.py',
+                    '-d', tmp_dir,
+                    '-o', index_dir
+                ]
+            check_call(cmd)
+
     finally:
         if tmp_dir and os.path.exists(tmp_dir):
             shutil.rmtree(tmp_dir)
@@ -276,10 +283,13 @@ def get_commercial_intervals(video_dir: str, video: Video):
 
 def get_face_intervals(video_dir: str, video: Video, face_sample_rate: int):
 
-    def load_file(name: str, optional: bool = False):
+    def load_file(name: str, second: str = '', optional: bool = False):
         fpath = os.path.join(video_dir, video.name, name)
+        secondary = os.path.join(video_dir, video.name, second)
         if os.path.exists(fpath):
             return load_json(fpath)
+        elif second and  os.path.exists(secondary):
+            return load_json(secondary)
         elif optional:
             return []
         else:
@@ -291,8 +301,8 @@ def get_face_intervals(video_dir: str, video: Video, face_sample_rate: int):
     }
     gender_dict = {'f': 0, 'm': 1, 'o': 2}
     identities = {
-        a: b
-        for a, b, _ in load_file(FILE_IDENTITIES_PROP, optional=True)
+        a: b.lower()
+        for a, b, _ in load_file(FILE_IDENTITIES_PROP, FILE_IDENTITIES, optional=True)
     }
     face_intervals = []
     person_face_intervals = defaultdict(list)
@@ -316,10 +326,13 @@ def get_face_intervals(video_dir: str, video: Video, face_sample_rate: int):
 
 def format_bbox_file_data(video_dir: str, video: Video, face_sample_rate: int):
 
-    def load_file(name: str, optional: bool = False):
+    def load_file(name: str, second: str = '', optional: bool = False):
         fpath = os.path.join(video_dir, video.name, name)
+        secondary = os.path.join(video_dir, video.name, second)
         if os.path.exists(fpath):
             return load_json(fpath)
+        elif second and os.path.exists(secondary):
+            return load_json(secondary)
         elif optional:
             return []
         else:
@@ -330,8 +343,8 @@ def format_bbox_file_data(video_dir: str, video: Video, face_sample_rate: int):
         for a, b, _ in load_file(FILE_GENDERS)
     }
     identities = {
-        a: b
-        for a, b, _ in load_file(FILE_IDENTITIES_PROP,  optional=True)
+        a: b.lower()
+        for a, b, _ in load_file(FILE_IDENTITIES_PROP, FILE_IDENTITIES, optional=True)
     }
     # person IDs start at 1 to ensure ID passes any boolean check
     identity_to_id = {
@@ -365,9 +378,18 @@ def format_bbox_file_data(video_dir: str, video: Video, face_sample_rate: int):
 def collect_caption_files(video_dir: str, videos: List[Video]):
     tmp_dir = tempfile.mkdtemp()
     for video in videos:
-        src_path = os.path.join(video_dir, video.name, FILE_CAPTIONS)
+        captions_file = FILE_CAPTIONS
+        if not os.path.exists(os.path.join(video_dir, video.name, FILE_CAPTIONS)):
+            if not os.path.exists(os.path.join(video_dir, video.name, FILE_CAPTIONS_ORIG)):
+                print("No captions exist for video '{}'".format(video.name))
+                continue
+
+            captions_file = FILE_CAPTIONS_ORIG
+
+        src_path = os.path.join(video_dir, video.name, captions_file)
         dst_path = os.path.join(tmp_dir, '{}.srt'.format(video.name))
         shutil.copyfile(src_path, dst_path)
+
     return tmp_dir
 
 
