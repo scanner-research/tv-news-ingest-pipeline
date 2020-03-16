@@ -73,8 +73,11 @@ def main(year, local_out_path, list_file, gcs_video_path, gcs_caption_path,
 
     upload_all_pipeline_outputs_to_cloud(PIPELINE_OUTPUT_DIR, downloaded, num_processes, GCS_OUTPUT_DIR)
     upload_processed_videos_to_cloud(local_out_path, downloaded, num_processes, gcs_video_path, gcs_caption_path)
-
+    
+    # Clean up
     shutil.rmtree(WORKING_DIR)
+    cmd = ['sudo', 'docker', '--host', '127.0.0.1:2375', 'system', 'prune', '-a']
+    subprocess.check_call(cmd)
 
 
 def upload_all_pipeline_outputs_to_cloud(out_path, downloaded, num_processes, gcs_output_path):
