@@ -2,15 +2,17 @@
 
 import argparse
 import datetime
+import errno
+import fcntl
 import json
 from multiprocessing import Pool
 import os
+from pathlib import Path
 import re
 import shutil
 import subprocess
 import time
 
-from util.utils import lock_script
 
 GCS_OUTPUT_DIR = 'gs://esper/tvnews/ingest-pipeline/tmp'
 
@@ -102,6 +104,7 @@ def list_processed_outputs():
     videos = set(x[1] for x in videos)
     return videos
 
+
 def list_pipeline_outputs(year, gcs_output_path):
     videos = set()
 
@@ -117,6 +120,33 @@ def list_pipeline_outputs(year, gcs_output_path):
             pass
 
     return videos
+
+
+def lock_script() -> bool:
+    """
+    Locks a file pertaining to this script so that it cannot be run simultaneously.
+
+    Since the lock is automatically released when this script ends, there is no
+    need for an unlock function for this use case.
+
+    Returns:
+        True if the lock was acquired, False otherwise.
+
+    """
+
+    lockfile = '/tmp/{}.lock'.format(Path(__file__).name)
+
+    try:
+        # Try to grab an exclusive lock on the file, raise error otherwise
+        fcntl.lockf(open(lockfile, 'w'), fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+    except OSError as e:
+        if e.errno == errno.EACCES or e.errno == errno.EAGAIN:
+            return False
+        raise
+
+    else:
+        return True
 
 
 def parse_identifier(s):

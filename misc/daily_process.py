@@ -22,16 +22,17 @@ Finally, all local files are erased after being uploaded.
 
 import argparse
 import datetime
+import errno
+import fcntl
 import json
 from multiprocessing import Pool
 import os
+from pathlib import Path
 import re
 import shutil
 import subprocess
 import time
 from tqdm import tqdm
-
-from util.utils import lock_script
 
 
 WORKING_DIR = '/tmp/daily_process'
@@ -42,11 +43,11 @@ PIPELINE_OUTPUT_DIR =  os.path.join(WORKING_DIR, 'pipeline_output')
 
 GCS_VIDEOS_DIR = 'gs://esper/tvnews/videos'
 GCS_CAPTIONS_DIR = 'gs://esper/tvnews/subs'
-GCS_OUTPUT_DIR = 'gs://esper/tvnews/ingest-pipeline/tmp'  # pipeline output
+GCS_OUTPUT_DIR = 'gs://esper/tvnews/ingest-pipeline/outputs'  # pipeline output
 
 PREFIXES = ['MSNBC', 'MSNBCW', 'CNN', 'CNNW', 'FOXNEWS', 'FOXNEWSW']
 
-MAX_VIDEO_DOWNLOADS = 72
+MAX_VIDEO_DOWNLOADS = 24
 
 
 def get_args():
@@ -273,6 +274,33 @@ def upload_video_and_subs_to_cloud(args):
 
         # FIXME: probably want to keep the video files around locally
         # shutil.rmtree(identifier)
+
+
+def lock_script() -> bool:
+    """
+    Locks a file pertaining to this script so that it cannot be run simultaneously.
+
+    Since the lock is automatically released when this script ends, there is no
+    need for an unlock function for this use case.
+
+    Returns:
+        True if the lock was acquired, False otherwise.
+
+    """
+
+    lockfile = '/tmp/{}.lock'.format(Path(__file__).name)
+
+    try:
+        # Try to grab an exclusive lock on the file, raise error otherwise
+        fcntl.lockf(open(lockfile, 'w'), fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+    except OSError as e:
+        if e.errno == errno.EACCES or e.errno == errno.EAGAIN:
+            return False
+        raise
+
+    else:
+        return True
 
 
 if __name__ == '__main__':

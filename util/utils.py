@@ -77,33 +77,6 @@ def json_is_valid(path: str) -> bool:
     return True
 
 
-def lock_script() -> bool:
-    """
-    Locks a file pertaining to this script so that it cannot be run simultaneously.
-
-    Since the lock is automatically released when this script ends, there is no
-    need for an unlock function for this use case.
-
-    Returns:
-        True if the lock was acquired, False otherwise.
-
-    """
-
-    lockfile = open('/tmp/{}.lock'.format(__file__), 'w')
-
-    try:
-        # Try to grab an exclusive lock on the file, raise error otherwise
-        fcntl.lockf(lockfile, fcntl.LOCK_EX | fcntl.LOCK_NB)
-
-    except OSError as e:
-        if e.errno == errno.EACCES or e.errno == errno.EAGAIN:
-            return False
-        raise
-
-    else:
-        return True
-
-
 ########## Scanner ##########
 # These are used in both scanner_component.py and black_frame_detection.py.
 
