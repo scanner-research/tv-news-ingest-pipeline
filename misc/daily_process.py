@@ -6,6 +6,8 @@ import os
 import json
 import time
 import shutil
+import errno
+import fcntl
 import datetime
 import subprocess
 from subprocess import check_output, check_call
@@ -19,13 +21,11 @@ BATCH_VIDEOS_PATH = os.path.join(WORKING_DIR, 'batch_videos.txt')
 BATCH_CAPTIONS_PATH = os.path.join(WORKING_DIR, 'batch_captions.txt')
 PIPELINE_OUTPUT_DIR =  os.path.join(WORKING_DIR, 'pipeline_output')
 
-GCS_VIDEOS_DIR = 'gs://esper/tvnews/videos_processed'
-GCS_CAPTIONS_DIR = 'gs://esper/tvnews/subs_processed'
-GCS_OUTPUT_DIR = 'gs://esper/tvnews/ingest-pipeline/tmp/'  # pipeline output goes here
+GCS_VIDEOS_DIR = 'gs://esper/tvnews/videos'
+GCS_CAPTIONS_DIR = 'gs://esper/tvnews/subs'
+GCS_OUTPUT_DIR = 'gs://esper/tvnews/ingest-pipeline/tmp'  # pipeline output goes here
 
-APP_DATA_PATH = 'data' # in tv-news-viewer
-
-MAX_VIDEO_DOWNLOADS = 100
+MAX_VIDEO_DOWNLOADS = 72
 
 PREFIXES = ['MSNBC', 'MSNBCW', 'CNN', 'CNNW', 'FOXNEWS', 'FOXNEWSW']
 
@@ -52,6 +52,15 @@ def get_args():
 
 def main(year, local_out_path, list_file, gcs_video_path, gcs_caption_path,
          num_processes):
+    # Make sure this is not currently running
+    f = open('/tmp/daily_process.lock', 'w')
+    try:
+        fcntl.lockf(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except IOError, e:
+        if e.errno = errno.EAGAIN:
+            print('This script is already running. Exiting.')
+            return
+        raise
 
     downloaded = download_unprocessed_videos(year, local_out_path, list_file,
                                              gcs_video_path, num_processes)

@@ -14,7 +14,7 @@ import yaml
 CONFIG_FILE = 'config.yml'
 
 CONFIG_KEYS = {
-    'num_pipelines': (os.cpu_count() // 2 if os.cpu_count() else 1),
+    'num_pipelines': (max(os.cpu_count() // 4, 1) if os.cpu_count() else 1),
     'stride': 1,
     'montage_width': 10,
     'montage_height': 6,

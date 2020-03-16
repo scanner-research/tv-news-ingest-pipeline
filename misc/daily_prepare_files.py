@@ -5,6 +5,8 @@ import datetime
 import re
 import os
 import json
+import errno
+import fcntl
 import time
 import subprocess
 import shutil
@@ -36,8 +38,18 @@ def get_args():
 
 
 def main(year, local_out_path, gcs_output_path, num_processes):
+    # Make sure this script isn't already running
+    f = open('/tmp/daily_prepare.lock', 'w')
+    try:
+        fcntl.lockf(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except IOError, e:
+        if e.errno == errno.EAGAIN:
+            print('This script is already running. Exiting.')
+            exit()
+        raise
+
     downloaded = download_unprepared_outputs(year, local_out_path, gcs_output_path, num_processes)
-    
+
     if len(downloaded) == 0:
         print('There are no video outputs to prepare at this time. Exiting.')
         return
