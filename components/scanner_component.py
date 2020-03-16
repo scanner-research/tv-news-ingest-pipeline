@@ -3,17 +3,17 @@
 """
 File: scanner_component.py
 --------------------------
-Script for detecting faces, computing face embeddings, and extracting cropped 
-images of the faces using Scanner. All these outputs are computed together to 
+Script for detecting faces, computing face embeddings, and extracting cropped
+images of the faces using Scanner. All these outputs are computed together to
 reduce frame decode overhead.
 
-Since all Scanner outputs for a single run require the same dimensionality, 
-black frame detection cannot be run together with these outputs that are 
+Since all Scanner outputs for a single run require the same dimensionality,
+black frame detection cannot be run together with these outputs that are
 computed on strided frames.
 
-Be careful when modifying the number of pipelines: you never need more 
-pipelines than videos, and a ~4GB TensorFlow model will be loaded per 
-pipeline, so if you run into any errors related to memory, try decreasing the 
+Be careful when modifying the number of pipelines: you never need more
+pipelines than videos, and a ~4GB TensorFlow model will be loaded per
+pipeline, so if you run into any errors related to memory, try decreasing the
 number of pipelines.
 
 
@@ -53,25 +53,21 @@ Example
 import argparse
 from functools import partial
 import os
-import sys
 import math
 import json
 import pickle
-import tqdm
 from tqdm import tqdm
 from multiprocessing import Pool
 
 import scannerpy as sp
-from scannerpy import FrameType, protobufs
 from scannerpy.storage import NamedStorage
 from scannerpy.types import BboxList
 import scannertools.face_detection
 import scannertools.face_embedding
 from scannertools.face_embedding import FacenetEmbeddings
 
+# Importing face_detection_and_embeddings registers some scanner operations.
 from components.face_detection_and_embeddings import (
-    dilate_bboxes,
-    crop_faces,
     get_face_bboxes_results,
     get_face_embeddings_results,
     handle_face_crops_results
@@ -119,7 +115,7 @@ def get_args():
     return parser.parse_args()
 
 
-def main(in_path, out_path, init_run=False, force_rerun=False, 
+def main(in_path, out_path, init_run=False, force_rerun=False,
         pipelines=NUM_PIPELINES, interval=STRIDE, disable=None):
 
     init_scanner_config()
@@ -128,9 +124,9 @@ def main(in_path, out_path, init_run=False, force_rerun=False,
         video_paths = [in_path]
     else:
         video_paths = [l.strip() for l in open(in_path, 'r') if l.strip()]
-    
+
     out_paths = [os.path.join(out_path, get_base_name(v)) for v in video_paths]
-    process_videos(video_paths, out_paths, init_run, force_rerun, pipelines, 
+    process_videos(video_paths, out_paths, init_run, force_rerun, pipelines,
                    interval, disable)
 
 
@@ -162,11 +158,11 @@ def process_videos(video_paths, out_paths, init_run=False, rerun=False,
     if not video_names:
         print('All videos have existing scanner outputs')
         return
-    
+
     # Don't reingest videos with existing output
     videos = [sp.NamedVideoStream(cl, a, path=b, inplace=True)
               for a, b in zip(video_names, video_paths)]
-    
+
     all_strides = [
         get_video_stride(video_name, v, interval)
         for video_name, v in zip(
@@ -221,12 +217,12 @@ def process_videos(video_paths, out_paths, init_run=False, rerun=False,
             del_fn=lambda c, o: NamedStorage().delete(c, o),
             clean=rerun
         )
-  
+
     print('Running graph')
     cl.run(output_ops,
            sp.PerfParams.estimate(pipeline_instances_per_node=pipelines),
            cache_mode=sp.CacheMode.Ignore)
-  
+
     # Async callback function
     def callback_fn(data=None, path=None, save_fn=None, pbar=None):
         if save_fn:
@@ -237,17 +233,17 @@ def process_videos(video_paths, out_paths, init_run=False, rerun=False,
     tmp_dir = '/tmp/face_crops'
     if not os.path.exists(tmp_dir):
         os.makedirs(tmp_dir)
-    
+
     with Pool() as workers, tqdm(
         total=len(video_names) * (len(SCANNER_COMPONENT_OUTPUTS) - len(disable)),
         desc='Collecting output', unit='output'
     ) as pbar:
-        for (video_name, out_path, stride, meta, output_faces, 
+        for (video_name, out_path, stride, meta, output_faces,
              output_embeddings, output_crops) in zip(
-                video_names, out_paths, all_strides, all_metadata, 
+                video_names, out_paths, all_strides, all_metadata,
                 all_output_faces, all_output_embeddings, all_output_crops
         ):
-            if all(out is None or out.committed() for out in 
+            if all(out is None or out.committed() for out in
                    [output_faces, output_embeddings, output_crops]):
                 if not os.path.isdir(out_path):
                     os.makedirs(out_path)
@@ -265,7 +261,7 @@ def process_videos(video_paths, out_paths, init_run=False, rerun=False,
                 metadata_outpath = os.path.join(out_path, FILE_METADATA)
                 save_json(meta, metadata_outpath)
                 pbar.update()
-                
+
                 # Save bboxes
                 if output_faces is not None:
                     bbox_outpath = os.path.join(out_path, FILE_BBOXES)
@@ -295,11 +291,11 @@ def process_videos(video_paths, out_paths, init_run=False, rerun=False,
                         pickle.dump(cropped_faces, f)
                     crops_outpath = os.path.join(out_path, DIR_CROPS)
                     result = workers.apply_async(
-                        handle_face_crops_results, 
+                        handle_face_crops_results,
                         args=(tmp_path, crops_outpath),
                         callback=partial(callback_fn, pbar=pbar)
                     )
-                
+
             else:
                 tqdm.write(('Missing results for {}: faces={}, embs={}, '
                        'crops={}').format(
@@ -319,7 +315,7 @@ def get_video_stride(video_name, video, interval, cache_dir='/tmp/stride'):
     if os.path.exists(cache_path):
         with open(cache_path) as f:
             return int(f.read())
-    
+
     fps = video.as_hwang().video_index.fps()
     stride = math.ceil(interval * fps)  # default 3 second intervals
     with open(cache_path, 'w') as f:
@@ -333,7 +329,7 @@ def get_video_metadata(video_name, video):
         'name': video_name,
         'fps': video.as_hwang().video_index.fps(),
         'frames': video.as_hwang().video_index.frames(),
-        'width': video.as_hwang().video_index.frame_width(), 
+        'width': video.as_hwang().video_index.frame_width(),
         'height': video.as_hwang().video_index.frame_height()
     }
 

@@ -2,15 +2,15 @@
 
 import argparse
 import datetime
-import re
-import os
 import json
-import errno
-import fcntl
-import time
-import subprocess
-import shutil
 from multiprocessing import Pool
+import os
+import re
+import shutil
+import subprocess
+import time
+
+from util.utils import lock_script
 
 GCS_OUTPUT_DIR = 'gs://esper/tvnews/ingest-pipeline/tmp'
 
@@ -39,14 +39,9 @@ def get_args():
 
 def main(year, local_out_path, gcs_output_path, num_processes):
     # Make sure this script isn't already running
-    f = open('/tmp/daily_prepare.lock', 'w')
-    try:
-        fcntl.lockf(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except IOError, e:
-        if e.errno == errno.EAGAIN:
-            print('This script is already running. Exiting.')
-            exit()
-        raise
+    if not lock_script():
+        print('This script is already running. Exiting.')
+        return
 
     downloaded = download_unprepared_outputs(year, local_out_path, gcs_output_path, num_processes)
 

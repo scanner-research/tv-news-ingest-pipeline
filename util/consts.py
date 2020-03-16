@@ -24,16 +24,3 @@ SCANNER_COMPONENT_OUTPUTS = [
     FILE_METADATA,
     DIR_CROPS
 ]
-
-LOCAL_TOML = """
-# Scanner config
-# Copy this to ~/.scanner/config.toml
-
-[storage]
-type = "posix"
-db_path = "/root/.scanner/db"
-[network]
-worker_port = "5002"
-master = "localhost"
-master_port = "5001"
-"""
