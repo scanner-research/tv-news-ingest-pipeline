@@ -36,11 +36,26 @@ def get_args():
 
 
 def main(year, local_out_path, gcs_output_path, num_processes):
-    download_unprepared_outputs(year, local_out_path, gcs_output_path, num_processes)
+    downloaded = download_unprepared_outputs(year, local_out_path, gcs_output_path, num_processes)
+    
+    if len(downloaded) == 0:
+        print('There are no video outputs to prepare at this time. Exiting.')
+        return
+
     cmd = ['python3', 'prepare_files_for_viewer.py', '-u', LOCAL_OUTPUT_PATH, APP_DATA_PATH, '--index-dir', INDEX_PATH]
     subprocess.check_call(cmd)
 
+    os.chdir('../esper-tv-widget')
+    subprocess.check_call(['python3', 'derive_data.py', '-t', '1000'])
+
+    print('Cleaning up local files.')
     shutil.rmtree(LOCAL_OUTPUT_PATH)
+
+    print('Restarting server.')
+    subprocess.check_call(['sudo', 'service', 'tv-viewer', 'restart'])
+    subprocess.check_call(['sudo', 'rm', '-rf', '/tmp/nginx-cache'])
+    subprocess.check_call(['sudo', 'service', 'nginx', 'restart'])
+
 
 def download_unprepared_outputs(year, local_out_path, gcs_output_path, num_processes):
     os.makedirs(local_out_path, exist_ok=True)
