@@ -72,12 +72,12 @@ def main(in_path, out_path, init_run=False, force=False):
         print('All videos have existing black frame outputs.')
         return
 
-    for video_path, out_path in zip(tqdm(
-        video_paths, desc='Detecting black frames', unit='video'
-    ), out_paths):
+    pbar = tqdm(total=len(video_paths), desc='Detecting black frames', unit='video')
+    for video_path, out_path in zip(video_paths, out_paths):
         cmd = [BINARY_PATH, '-n', '1', '-j', str(NUM_THREADS)]
         path_str = '{} {}'.format(video_path, out_path/FILE_BLACK_FRAMES)
         subprocess.run(cmd, input=path_str.encode('utf-8'), check=True)
+        pbar.update()
 
 
 def get_videos_to_process(video_paths, out_paths, skip=False):

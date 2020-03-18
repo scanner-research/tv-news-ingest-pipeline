@@ -10,11 +10,11 @@ Example
 
     in_path:  output_dir
     out_path: output_dir
-        
-    where 'output_dir' contains video output subdirectories (which in turn 
+
+    where 'output_dir' contains video output subdirectories (which in turn
     contain their own 'crops' directories)
 
-    outputs 
+    outputs
 
         output_dir/
         ├── video1
@@ -67,8 +67,8 @@ def main(in_path, out_path, force=False):
         if not os.path.isdir(p):
             os.makedirs(p)
 
-    num_workers = min(len(video_names), 5)
-    num_threads_per_worker = 100 // num_workers  # prevent throttling
+    num_workers = min(len(video_names), 4)
+    num_threads_per_worker = 60 // num_workers  # prevent throttling
 
     with Pool(num_workers) as workers, tqdm(
         total=len(video_names), desc='Identifying faces', unit='video'
@@ -96,11 +96,11 @@ def main(in_path, out_path, force=False):
 
         workers.close()
         workers.join()
-        
 
-def process_video(crops_path, identities_outpath, max_threads=100):
+
+def process_video(crops_path, identities_outpath, max_threads=60):
     assert os.path.isdir(crops_path)
-    
+
     img_files = [img for img in sorted(os.listdir(crops_path),
                  key=lambda x: int(get_base_name(x)))]
 
@@ -125,7 +125,7 @@ def submit_images_for_labeling(crops_path, img_files):
     img_filepaths = [os.path.join(crops_path, f) for f in img_files]
     montage_bytes, meta = create_montage_bytes(img_filepaths)
     img_ids = [int(get_base_name(x)) for x in img_files]
-   
+
     res = search_aws(montage_bytes, client)
     return process_labeling_results(meta['cols'], meta['block_dim'],
                                     img_ids, res)
