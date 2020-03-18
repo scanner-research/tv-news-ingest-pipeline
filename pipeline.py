@@ -17,7 +17,7 @@ script takes the video(s) through the following stages:
 
     - face identification (identify_faces_with_aws.py)
 
-    - propogate identities to unlabeled faces (identity_propogation.py)
+    - propagate identities to unlabeled faces (identity_propagation.py)
 
     - gender classification (classify_gender.py)
 
@@ -38,7 +38,7 @@ Sample output directory after pipeline completion:
     │   ├── embeddings.json
     │   ├── genders.json
     │   ├── identities.json
-    │   ├── identities_propogated.json
+    │   ├── identities_propagated.json
     │   ├── metadata.json
     │   ├── captions.srt
     │   ├── captions_orig.srt
@@ -78,7 +78,7 @@ NAMED_COMPONENTS = [
     'scanner_component',
     'black_frames',
     'identities',
-    'identity_propogation',
+    'identity_propagation',
     'genders',
     'captions_copy',
     'caption_alignment',
@@ -156,10 +156,10 @@ def main(in_path, captions, out_path, host,
         from components import identify_faces_with_aws
         identify_faces_with_aws.main(out_path, out_path, force=force)
 
-    if (script and script == 'identity_propogation') \
-            or (not script and 'identity_propogation' not in disable):
-        from components import identity_propogation
-        identity_propogation.main(out_path, out_path, force=force)
+    if (script and script == 'identity_propagation') \
+            or (not script and 'identity_propagation' not in disable):
+        from components import identity_propagation
+        identity_propagation.main(out_path, out_path, force=force)
 
     if (script and script == 'genders') \
             or (not script and 'genders' not in disable):

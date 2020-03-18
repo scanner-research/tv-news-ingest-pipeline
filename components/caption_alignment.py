@@ -3,6 +3,7 @@ import json
 import math
 from multiprocessing import Pool
 import os
+from pathlib import Path
 import pickle
 import re
 import sys
@@ -542,27 +543,38 @@ def main(video_in_path, transcript_in_path, out_path, force=False):
                for i, t in enumerate(transcript_paths)), \
            'There was a mismatch between videos and transcript names.'
 
-    out_paths = [os.path.join(out_path, name) for name in video_names]
+    out_paths = [Path(out_path)/name for name in video_names]
 
     for p in out_paths:
-        os.makedirs(p, exist_ok=True)
+        p.mkdir(exist_ok=True)
+
+    msg = []
+    for i in range(len(video_names) - 1, -1, -1):
+        aligned_captions_outpath = out_paths[i]/FILE_CAPTIONS
+        if not force and aligned_captions_outpath.exists():
+            msg.append("Skipping aligning captions for video '{}': aligned "
+                       "captions already exist".format(video_names[i]))
+            video_names.pop(i)
+            out_paths.pop(i)
+            transcript_paths.pop(i)
+            video_paths.pop(i)
+
+    if not video_names:
+        print('All videos have existing aligned captions.')
+        return
+
+    if msg:
+        print(*msg, sep='\n')
 
     num_threads = os.cpu_count() if os.cpu_count() else 1
     for i in range(len(video_names)):
-        if not force and os.path.exists(os.path.join(out_paths[i],
-                                                     FILE_CAPTIONS)):
-            print("Skipping aligning captions for video '{}': captions file " \
-                  "already exists!".format(
-                  video_names[i]))
-            continue
-
         print("Aligning captions for video '{}'".format(video_names[i]))
 
         aligner = TranscriptAligner(win_size=300, seg_length=60,
             max_misalign=10, num_thread=num_threads, estimate=True, missing_thresh=0.2,
             media_path=video_paths[i],
             transcript_path=transcript_paths[i],
-            align_dir=out_paths[i])
+            align_dir=str(out_paths[i]))
 
         stats = aligner.run()
-        save_json(stats, os.path.join(out_paths[i], FILE_ALIGNMENT_STATS))
+        save_json(stats, str(out_paths[i]/FILE_ALIGNMENT_STATS))

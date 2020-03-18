@@ -33,6 +33,7 @@ import json
 import math
 from multiprocessing import Pool
 import os
+from pathlib import Path
 from PIL import Image, ImageDraw
 import time
 
@@ -59,13 +60,36 @@ def get_args():
 
 
 def main(in_path, out_path, force=False):
-    # Check if input is for a batch or single video
     video_names = list(os.listdir(in_path))
-    out_paths = [os.path.join(out_path, name) for name in video_names]
-
+    out_paths = [Path(out_path)/name for name in video_names]
+    in_path = Path(in_path)
     for p in out_paths:
-        if not os.path.isdir(p):
-            os.makedirs(p)
+        p.mkdir(exist_ok=True)
+
+    # Prune videos that should not be run
+    msg = []
+    for i in range(len(video_names) - 1, -1, -1):
+        crops_path = in_path/video_names[i]/DIR_CROPS
+        if not crops_path.is_dir():
+            msg.append("Skipping face identification for video '{}': no '{}' "
+                       "directory found.".format(video_names[i], DIR_CROPS))
+            videos_names.pop(i)
+            out_paths.pop(i)
+            continue
+
+        identities_outpath = out_paths[i]/FILE_IDENTITIES
+        if not force and identities_outpath.exists():
+            msg.append("Skipping face identification for video '{}': '{}' "
+                       "already exists.".format(video_names[i], FILE_IDENTITIES))
+            video_names.pop(i)
+            out_paths.pop(i)
+
+    if not video_names:
+        print('All videos have existing face identities.')
+        return
+
+    if msg:
+        print(*msg, sep='\n')
 
     num_workers = min(len(video_names), 4)
     num_threads_per_worker = 60 // num_workers  # prevent throttling
@@ -74,25 +98,13 @@ def main(in_path, out_path, force=False):
         total=len(video_names), desc='Identifying faces', unit='video'
     ) as pbar:
         for video_name, output_dir in zip(video_names, out_paths):
-            crops_path = os.path.join(in_path, video_name, DIR_CROPS)
-            if not os.path.exists(crops_path):
-                tqdm.write("Skipping face identification for video '{}': no "
-                           "'{}' directory found!".format(video_name,
-                                                          DIR_CROPS))
-                pbar.update()
-                continue
-
-            identities_outpath = os.path.join(output_dir, FILE_IDENTITIES)
-            if force or not os.path.exists(identities_outpath):
-                workers.apply_async(
-                    process_video,
-                    args=(crops_path, identities_outpath,
-                          num_threads_per_worker),
-                    callback=lambda x: pbar.update())
-            else:
-                tqdm.write("Skipping face identification for video '{}': '{}' "
-                    "already exists!".format(video_name, FILE_IDENTITIES))
-                pbar.update()
+            crops_path = in_path/video_name/DIR_CROPS
+            identities_outpath = output_dir/FILE_IDENTITIES
+            workers.apply_async(
+                process_video,
+                args=(str(crops_path), str(identities_outpath),
+                      num_threads_per_worker),
+                callback=lambda x: pbar.update())
 
         workers.close()
         workers.join()
