@@ -34,8 +34,9 @@ import subprocess
 import time
 from tqdm import tqdm
 
-
-WORKING_DIR = '/tmp/daily_process'
+# Do not place inside of /tmp so that partial outputs remain if the machine
+# goes down
+WORKING_DIR = '.daily_process_tmp'
 DOWNLOAD_DIR = os.path.join(WORKING_DIR, 'downloads')
 BATCH_VIDEOS_PATH = os.path.join(WORKING_DIR, 'batch_videos.txt')
 BATCH_CAPTIONS_PATH = os.path.join(WORKING_DIR, 'batch_captions.txt')
@@ -47,7 +48,7 @@ GCS_OUTPUT_DIR = 'gs://esper/tvnews/ingest-pipeline/outputs'  # pipeline output
 
 PREFIXES = ['MSNBC', 'MSNBCW', 'CNN', 'CNNW', 'FOXNEWS', 'FOXNEWSW']
 
-MAX_VIDEO_DOWNLOADS = 24
+MAX_VIDEO_DOWNLOADS = 72
 
 
 def get_args():
