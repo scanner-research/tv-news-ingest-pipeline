@@ -55,7 +55,7 @@ def main(year, local_out_path, gcs_output_path, num_processes):
     subprocess.check_call(cmd)
 
     os.chdir('../esper-tv-widget')
-    subprocess.check_call(['python3', 'derive_data.py', '-t', '1000'])
+    subprocess.check_call(['python3', 'derive_data.py', '-i'])
 
     print('Cleaning up local files.')
     shutil.rmtree(LOCAL_OUTPUT_PATH)
