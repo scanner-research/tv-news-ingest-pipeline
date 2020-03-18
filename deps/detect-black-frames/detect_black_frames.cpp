@@ -1,7 +1,7 @@
 /*
  * File: detect_black_frames.cpp
  * -----------------------------
- * Detects black frames in a video and write the detected frame numbers to a
+ * Detects black frames in a video and writes the detected frame numbers to a
  * JSON file.
  */
 
