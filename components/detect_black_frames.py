@@ -3,16 +3,11 @@
 """
 File: black_frame_detection.py
 ------------------------------
-Script for detecting black frames in videos using Scanner.
-
-Notes: Must be run inside Scanner's docker container.
+Script for detecting black frames in videos using a program written in CPP,
+found in deps/detect-black-frames..
 
 When running on a batch of videos for the first time, use the '--init-run'
 flag to skip a potentially costly check to see if the outputs already exist.
-
-If docker is running as root (which it most commonly will be), then all
-directories and files created will be owned by root.
-
 
 Example
 -------
@@ -36,23 +31,15 @@ Example
 """
 
 import argparse
-from functools import partial
-import itertools
-import multiprocessing as mp
-from multiprocessing.pool import ThreadPool
 import subprocess
-from collections import deque
 import os
 from pathlib import Path
 from tqdm import tqdm
 
-import cv2
-import numpy as np
-
 from util.consts import FILE_BLACK_FRAMES
 from util.utils import json_is_valid
 
-NUM_THREADS = os.cpu_count()
+NUM_THREADS = os.cpu_count() if os.cpu_count() else 1
 BINARY_PATH = 'deps/detect-black-frames/detect_black_frames'
 
 def get_args():
@@ -111,7 +98,6 @@ def get_videos_to_process(video_paths, out_paths, skip=False):
     video_names = [p.stem for p in video_paths]
     if not skip:
         for i in range(len(video_names) - 1, -1, -1):
-            print(out_paths[i]/FILE_BLACK_FRAMES)
             if json_is_valid(out_paths[i]/FILE_BLACK_FRAMES):
                 video_names.pop(i)
                 out_paths.pop(i)
