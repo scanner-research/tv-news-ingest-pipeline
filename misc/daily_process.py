@@ -94,7 +94,7 @@ def main(year, local_out_path, gcs_video_path, gcs_caption_path, num_processes):
     # Clean up
     shutil.rmtree(WORKING_DIR)
     cmd = ['sudo', 'docker', '--host', '127.0.0.1:2375', 'container', 'prune',
-           '-a']
+           '-f']
     subprocess.check_call(cmd)
 
 
@@ -122,7 +122,7 @@ def upload_pipeline_output_to_cloud(args):
 
     if os.path.exists(identifier):
         # does not upload crops
-        cmd = ['gsutil', 'cp', '-n', os.path.join(identifier, '*'), gcs_output_path]
+        cmd = ['gsutil', '-m', 'cp', '-n', os.path.join(identifier, '*'), os.path.join(gcs_output_path, identifier)]
         print('COMMAND', cmd)
         subprocess.check_call(cmd)
 

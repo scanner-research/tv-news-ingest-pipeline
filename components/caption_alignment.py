@@ -83,7 +83,7 @@ class TranscriptAligner():
         if align_dir is not None:
             os.makedirs(align_dir, exist_ok=True)
 
-        self.pbar = None
+        self.shift_seg_list = None
 
 
     def load_transcript(self, transcript_path):
@@ -443,7 +443,8 @@ class TranscriptAligner():
 
         if self.estimate and missing_rate > self.missing_thresh:
             self.shift_seg_list = self.estimate_shift_all()
-            self.extract_transcript_all(estimate=True)
+            if self.shift_seg_list:
+                self.extract_transcript_all(estimate=True)
 
             # Second: run with estimating the shift
             with Pool(self.num_thread) as workers, tqdm(total=self.num_seg,

@@ -14,7 +14,7 @@ import subprocess
 import time
 
 
-GCS_OUTPUT_DIR = 'gs://esper/tvnews/ingest-pipeline/tmp'
+GCS_OUTPUT_DIR = 'gs://esper/tvnews/ingest-pipeline/outputs'
 
 APP_DATA_PATH = '../esper-tv-widget/data/'
 INDEX_PATH = '../esper-tv-widget/index'
@@ -94,7 +94,7 @@ def download_unprepared_outputs(year, local_out_path, gcs_output_path, num_proce
 
 def download_pipeline_output(args):
     identifier, gcs_output_path, local_out_path = args
-    subprocess.check_call(['gsutil', 'cp', '-r', os.path.join(gcs_output_path, identifier), './'])
+    subprocess.check_call(['gsutil', '-m', 'cp', '-nr', os.path.join(gcs_output_path, identifier), './'])
 
 
 def list_processed_outputs():
