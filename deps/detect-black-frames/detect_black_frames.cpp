@@ -80,8 +80,8 @@ void getArgs(int argc, char *argv[]) {
 int main(int argc, char *argv[]) {
     getArgs(argc, argv);
 
-    vector<string> videoPaths;
-    vector<string> outputPaths;
+    PathsList videoPaths;
+    PathsList outputPaths;
     getIOPaths(videoPaths, outputPaths);
 
     vector<FramesList> outputs(numVideos);
@@ -145,7 +145,7 @@ bool writeBlackFrames(const string& filename, const FramesList& detected) {
     return true;
 }
 
-void getIOPaths(vector<string>& videoPaths, vector<string>& outputPaths) {
+void getIOPaths(PathsList& videoPaths, PathsList& outputPaths) {
     string inPath, outPath;
 
     for (size_t i = 0; i < numVideos; i++) {
