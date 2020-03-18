@@ -1,21 +1,42 @@
 #!/usr/bin/env python3
 
+"""
+File: daily_process.py
+----------------------
+This script is for downloading and processing new videos from the Internet
+Archive, meant to be run on a daily basis.
+
+First, we determine which videos are available that have not already been
+processed.
+
+Then, we download those videos and transcripts, and run them as a batch
+through the pipeline.
+
+The outputs of the pipeline (not including face crops) are then uploaded to a
+cloud bucket to be downloaded at the server, which will perform the
+incremental update.
+
+Finally, all local files are erased after being uploaded.
+
+"""
+
 import argparse
-import re
-import os
-import json
-import time
-import shutil
+import datetime
 import errno
 import fcntl
-import datetime
-import subprocess
-from subprocess import check_output, check_call
-import subprocess
-from tqdm import tqdm
+import json
 from multiprocessing import Pool
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import time
+from tqdm import tqdm
 
-WORKING_DIR = '/tmp/daily_process'
+# Do not place inside of /tmp so that partial outputs remain if the machine
+# goes down
+WORKING_DIR = '.daily_process_tmp'
 DOWNLOAD_DIR = os.path.join(WORKING_DIR, 'downloads')
 BATCH_VIDEOS_PATH = os.path.join(WORKING_DIR, 'batch_videos.txt')
 BATCH_CAPTIONS_PATH = os.path.join(WORKING_DIR, 'batch_captions.txt')
@@ -23,11 +44,12 @@ PIPELINE_OUTPUT_DIR =  os.path.join(WORKING_DIR, 'pipeline_output')
 
 GCS_VIDEOS_DIR = 'gs://esper/tvnews/videos'
 GCS_CAPTIONS_DIR = 'gs://esper/tvnews/subs'
-GCS_OUTPUT_DIR = 'gs://esper/tvnews/ingest-pipeline/tmp'  # pipeline output goes here
+GCS_OUTPUT_DIR = 'gs://esper/tvnews/ingest-pipeline/outputs'  # pipeline output
+
+PREFIXES = ['MSNBC', 'MSNBCW', 'CNN', 'CNNW', 'FOXNEWS', 'FOXNEWSW']
 
 MAX_VIDEO_DOWNLOADS = 72
 
-PREFIXES = ['MSNBC', 'MSNBCW', 'CNN', 'CNNW', 'FOXNEWS', 'FOXNEWSW']
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -36,8 +58,6 @@ def get_args():
                               'specified, defaults to year it was yesterday.'))
     parser.add_argument('--local-out-path', default=DOWNLOAD_DIR,
                         help='Directory to save videos and captions to. ')
-    parser.add_argument('--list', dest='list_file',
-                        help='File to write the list of downloaded videos')
     parser.add_argument('--gcs-video-path', default=GCS_VIDEOS_DIR,
                         help=('The path in Google cloud to which videos should '
                               'be uploaded.'))
@@ -50,19 +70,14 @@ def get_args():
     return parser.parse_args()
 
 
-def main(year, local_out_path, list_file, gcs_video_path, gcs_caption_path,
-         num_processes):
-    # Make sure this is not currently running
-    f = open('/tmp/daily_process.lock', 'w')
-    try:
-        fcntl.lockf(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except IOError, e:
-        if e.errno = errno.EAGAIN:
-            print('This script is already running. Exiting.')
-            return
-        raise
+def main(year, local_out_path, gcs_video_path, gcs_caption_path, num_processes):
 
-    downloaded = download_unprocessed_videos(year, local_out_path, list_file,
+    # Make sure this is not currently running
+    if not lock_script():
+        print('This script is already running. Exiting.')
+        return
+
+    downloaded = download_unprocessed_videos(year, local_out_path,
                                              gcs_video_path, num_processes)
 
     create_batch_files(local_out_path, downloaded)
@@ -71,12 +86,15 @@ def main(year, local_out_path, list_file, gcs_video_path, gcs_caption_path,
            BATCH_CAPTIONS_PATH, PIPELINE_OUTPUT_DIR]
     subprocess.check_call(cmd)
 
-    upload_all_pipeline_outputs_to_cloud(PIPELINE_OUTPUT_DIR, downloaded, num_processes, GCS_OUTPUT_DIR)
-    upload_processed_videos_to_cloud(local_out_path, downloaded, num_processes, gcs_video_path, gcs_caption_path)
-    
+    upload_all_pipeline_outputs_to_cloud(PIPELINE_OUTPUT_DIR, downloaded,
+                                         num_processes, GCS_OUTPUT_DIR)
+    upload_processed_videos_to_cloud(local_out_path, downloaded, num_processes,
+                                     gcs_video_path, gcs_caption_path)
+
     # Clean up
     shutil.rmtree(WORKING_DIR)
-    cmd = ['sudo', 'docker', '--host', '127.0.0.1:2375', 'system', 'prune', '-a']
+    cmd = ['sudo', 'docker', '--host', '127.0.0.1:2375', 'container', 'prune',
+           '-a']
     subprocess.check_call(cmd)
 
 
@@ -131,7 +149,7 @@ def upload_processed_videos_to_cloud(local_out_path, downloaded, num_processes, 
     os.chdir(orig_path)
 
 
-def download_unprocessed_videos(year, local_out_path, list_file, gcs_video_path,
+def download_unprocessed_videos(year, local_out_path, gcs_video_path,
                                 num_processes):
     # Make sure output directory exists
     os.makedirs(local_out_path, exist_ok=True)
@@ -159,13 +177,8 @@ def download_unprocessed_videos(year, local_out_path, list_file, gcs_video_path,
             if len(to_download) >= MAX_VIDEO_DOWNLOADS:
                 break
 
-    if list_file:
-        with open(list_file, 'w') as f:
-            for identifier in to_download:
-                f.write(identifier)
-                f.write('\n')
-
     print('Downloading {} videos on {} threads'.format(len(to_download), num_processes))
+
     # Change the current working directory so we download all files into the
     # local_out_path
     orig_path = os.getcwd()
@@ -214,7 +227,7 @@ def list_downloaded_videos(year, gcs_video_path):
     # a leading star is way faster
     for prefix in PREFIXES:
         try:
-            output = check_output(
+            output = subprocess.check_output(
                 ['gsutil', 'ls', '{}/{}_{}*'.format(gcs_video_path, prefix, year)]).decode()
             videos |= {parse_ia_identifier(x) for x in output.split('\n') if x.strip()}
         except subprocess.CalledProcessError as e:
@@ -228,7 +241,7 @@ def list_ia_videos(year):
     identifier_re = re.compile(r'^[A-Z]+_[0-9]{8}_', re.IGNORECASE)
     for p in PREFIXES:
         query_string = '{}_{}'.format(p, year)
-        output = check_output(['ia', 'search', query_string]).decode()
+        output = subprocess.check_output(['ia', 'search', query_string]).decode()
         for line in output.split('\n'):
             line = line.strip()
             if line:
@@ -240,8 +253,8 @@ def list_ia_videos(year):
 
 def download_video_and_subs(identifier):
     try:
-        check_call(['ia', 'download', '--glob=*.mp4', identifier])
-        check_call(['ia', 'download', '--glob=*.srt', identifier])
+        subprocess.check_call(['ia', 'download', '--glob=*.mp4', identifier])
+        subprocess.check_call(['ia', 'download', '--glob=*.srt', identifier])
     except Exception as e:
         print("Error while downloading from internet archive", e)
 
@@ -262,6 +275,33 @@ def upload_video_and_subs_to_cloud(args):
 
         # FIXME: probably want to keep the video files around locally
         # shutil.rmtree(identifier)
+
+
+def lock_script() -> bool:
+    """
+    Locks a file pertaining to this script so that it cannot be run simultaneously.
+
+    Since the lock is automatically released when this script ends, there is no
+    need for an unlock function for this use case.
+
+    Returns:
+        True if the lock was acquired, False otherwise.
+
+    """
+
+    lockfile = '/tmp/{}.lock'.format(Path(__file__).name)
+
+    try:
+        # Try to grab an exclusive lock on the file, raise error otherwise
+        fcntl.lockf(open(lockfile, 'w'), fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+    except OSError as e:
+        if e.errno == errno.EACCES or e.errno == errno.EAGAIN:
+            return False
+        raise
+
+    else:
+        return True
 
 
 if __name__ == '__main__':

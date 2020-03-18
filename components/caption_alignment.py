@@ -20,11 +20,6 @@ from util.consts import FILE_ALIGNMENT_STATS, FILE_CAPTIONS
 from util.utils import get_base_name, save_json
 
 #----------Help functions for fid, time, second transfer----------
-def fid2second(fid, fps):
-    second = 1. * fid / fps
-    return second
-
-
 def time2second(time):
     return time[0]*3600 + time[1]*60 + time[2] + time[3] / 1000.0
 
@@ -87,7 +82,7 @@ class TranscriptAligner():
         if align_dir is not None:
             os.makedirs(align_dir, exist_ok=True)
 
-        self.pbar = None
+        self.shift_seg_list = None
 
 
     def load_transcript(self, transcript_path):
@@ -447,7 +442,8 @@ class TranscriptAligner():
 
         if self.estimate and missing_rate > self.missing_thresh:
             self.shift_seg_list = self.estimate_shift_all()
-            self.extract_transcript_all(estimate=True)
+            if self.shift_seg_list:
+                self.extract_transcript_all(estimate=True)
 
             # Second: run with estimating the shift
             with Pool(self.num_thread) as workers, tqdm(total=self.num_seg,
@@ -552,6 +548,7 @@ def main(video_in_path, transcript_in_path, out_path, force=False):
     for p in out_paths:
         os.makedirs(p, exist_ok=True)
 
+    num_threads = os.cpu_count() if os.cpu_count() else 1
     for i in range(len(video_names)):
         if not force and os.path.exists(os.path.join(out_paths[i],
                                                      FILE_CAPTIONS)):
@@ -563,7 +560,7 @@ def main(video_in_path, transcript_in_path, out_path, force=False):
         print("Aligning captions for video '{}'".format(video_names[i]))
 
         aligner = TranscriptAligner(win_size=300, seg_length=60,
-            max_misalign=10, num_thread=64, estimate=True, missing_thresh=0.2,
+            max_misalign=10, num_thread=num_threads, estimate=True, missing_thresh=0.2,
             media_path=video_paths[i],
             transcript_path=transcript_paths[i],
             align_dir=out_paths[i])

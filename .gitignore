@@ -9,3 +9,4 @@ debug/
 */**/__pycache__/
 -examples/*
 -examples/**/*.mp4
+.DS_Store

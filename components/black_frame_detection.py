@@ -7,10 +7,10 @@ Script for detecting black frames in videos using Scanner.
 
 Notes: Must be run inside Scanner's docker container.
 
-When running on a batch of videos for the first time, use the '--init-run' 
+When running on a batch of videos for the first time, use the '--init-run'
 flag to skip a potentially costly check to see if the outputs already exist.
 
-If docker is running as root (which it most commonly will be), then all 
+If docker is running as root (which it most commonly will be), then all
 directories and files created will be owned by root.
 
 
@@ -19,13 +19,13 @@ Example
 
     in_path:  batch.txt
     out_path: output_dir
-        
+
     where 'batch.txt' looks like:
 
         path/to/video1.mp4
         different/path/to/video2.mp4
 
-    outputs 
+    outputs
 
         output_dir/
         ├── video1
@@ -52,7 +52,7 @@ import scannertools.imgproc  # for op Histogram
 from util.config import NUM_PIPELINES
 from util.consts import FILE_BLACK_FRAMES
 from util.utils import (
-    get_base_name, 
+    get_base_name,
     init_scanner_config,
     json_is_valid,
     remove_unfinished_outputs,
@@ -69,15 +69,15 @@ def get_args():
                         help='running on videos for the first time')
     parser.add_argument('-f', '--force-rerun', action='store_true',
                         help='force rerun for all videos')
-    parser.add_argument('-p', '--pipelines', type=int, default=NUM_PIPELINES, 
+    parser.add_argument('-p', '--pipelines', type=int, default=NUM_PIPELINES,
                         help='number of pipelines for scanner')
     return parser.parse_args()
 
 
 def main(in_path, out_path, init_run=False, force_rerun=False,
-         pipelines=NUM_PIPELINES):
+        pipelines=1): #NUM_PIPELINES):
     init_scanner_config()
-    
+
     if in_path.endswith('.mp4'):
         video_paths = [in_path]
     else:  # batch text file
@@ -89,7 +89,7 @@ def main(in_path, out_path, init_run=False, force_rerun=False,
 
 def process_videos(video_paths, out_paths, init_run=False, rerun=False,
                    pipelines=NUM_PIPELINES):
-    
+
     assert len(video_paths) == len(out_paths), ('Mismatch between video and '
                                                 'output paths')
 
@@ -151,13 +151,13 @@ def process_videos(video_paths, out_paths, init_run=False, rerun=False,
         workers.close()
         workers.join()
 
-        
+
 @sp.register_python_op(name='BlackFrames', batch=1024)
 def black_frames(config, hists: Sequence[Histogram]) -> Sequence[bytes]:
     output = []
     for h in hists:
         threshold = 0.99 * sum(h[0])
-        is_black = (h[0][0] > threshold and h[1][0] > threshold 
+        is_black = (h[0][0] > threshold and h[1][0] > threshold
                     and h[2][0] > threshold)
         output.append(struct.pack('B', 1 if is_black else 0))
 

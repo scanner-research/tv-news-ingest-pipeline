@@ -147,8 +147,9 @@ def main(in_path, captions, out_path, host,
 
     if (script and script == 'black_frames') \
             or (not script and 'black_frames' not in disable):
-        run_black_frame_detection(in_path, out_path, video_dirpaths, init_run,
-                force, host=host, service=service)
+        from components import detect_black_frames
+        detect_black_frames.main(in_path, out_path, init_run=init_run,
+                                 force=force)
 
     if (script and script == 'identities') \
             or (not script and 'identities' not in disable):
@@ -221,13 +222,6 @@ def run_scanner_component(in_path, out_path, video_dirpaths, disable=None,
     run_command_in_container(cmd, in_path, out_path, video_dirpaths, host, service)
 
 
-def run_black_frame_detection(in_path, out_path, video_dirpaths, init_run=False,
-        force_rerun=False, host=DEFAULT_HOST, service=DEFAULT_SERVICE):
-    cmd = build_black_frame_detection_command(in_path, out_path, init_run,
-                                              force_rerun)
-    run_command_in_container(cmd, in_path, out_path, video_dirpaths, host, service)
-
-
 def prepare_docker_container(host=DEFAULT_HOST, service=DEFAULT_SERVICE):
     try:
         pull_container(host, service)
@@ -250,17 +244,6 @@ def build_scanner_component_command(in_path, out_path, disable=None,
             for d in scanner_parts:
                 cmd.append(d)
 
-    if init_run:
-        cmd.append('-i')
-    if force_rerun:
-        cmd.append('-f')
-
-    return ' '.join(cmd)
-
-
-def build_black_frame_detection_command(in_path, out_path, init_run=False,
-                                        force_rerun=False):
-    cmd = ['python3', 'components/black_frame_detection.py', in_path, out_path]
     if init_run:
         cmd.append('-i')
     if force_rerun:

@@ -2,15 +2,17 @@
 
 import argparse
 import datetime
-import re
-import os
-import json
 import errno
 import fcntl
-import time
-import subprocess
-import shutil
+import json
 from multiprocessing import Pool
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import time
+
 
 GCS_OUTPUT_DIR = 'gs://esper/tvnews/ingest-pipeline/outputs'
 
@@ -39,14 +41,9 @@ def get_args():
 
 def main(year, local_out_path, gcs_output_path, num_processes):
     # Make sure this script isn't already running
-    f = open('/tmp/daily_prepare.lock', 'w')
-    try:
-        fcntl.lockf(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except IOError as e:
-        if e.errno == errno.EAGAIN:
-            print('This script is already running. Exiting.')
-            exit()
-        raise
+    if not lock_script():
+        print('This script is already running. Exiting.')
+        return
 
     downloaded = download_unprepared_outputs(year, local_out_path, gcs_output_path, num_processes)
 
@@ -107,6 +104,7 @@ def list_processed_outputs():
     videos = set(x[1] for x in videos)
     return videos
 
+
 def list_pipeline_outputs(year, gcs_output_path):
     videos = set()
 
@@ -122,6 +120,33 @@ def list_pipeline_outputs(year, gcs_output_path):
             pass
 
     return videos
+
+
+def lock_script() -> bool:
+    """
+    Locks a file pertaining to this script so that it cannot be run simultaneously.
+
+    Since the lock is automatically released when this script ends, there is no
+    need for an unlock function for this use case.
+
+    Returns:
+        True if the lock was acquired, False otherwise.
+
+    """
+
+    lockfile = '/tmp/{}.lock'.format(Path(__file__).name)
+
+    try:
+        # Try to grab an exclusive lock on the file, raise error otherwise
+        fcntl.lockf(open(lockfile, 'w'), fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+    except OSError as e:
+        if e.errno == errno.EACCES or e.errno == errno.EAGAIN:
+            return False
+        raise
+
+    else:
+        return True
 
 
 def parse_identifier(s):
