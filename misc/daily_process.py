@@ -186,9 +186,12 @@ def download_unprocessed_videos(year, local_out_path, gcs_video_path,
     pool = Pool(processes = num_processes)
     num_done = 0
     start_time = time.time()
-    for _ in pool.imap_unordered(download_video_and_subs, to_download):
-        num_done+=1
-        print("Finished downloading {} of {} in {} seconds".format(num_done, len(to_download), time.time() - start_time))
+    for identifier in pool.imap_unordered(download_video_and_subs, to_download[:]):
+        if identifier:
+            to_download.remove(identifier)
+        else:
+            num_done+=1
+            print("Finished downloading {} of {} in {} seconds".format(num_done, len(to_download), time.time() - start_time))
 
     os.chdir(orig_path)
     return to_download
@@ -206,6 +209,9 @@ def create_batch_files(local_out_path, downloaded):
         files = os.listdir(id_path)
         captions = list(filter(lambda x: x.endswith('.srt'), files))
         captions = sorted(list(filter(lambda x: '.cc' in x, captions)))
+        if not captions:
+            print('No captions for ', identifier)
+            exit(1)
         os.rename(os.path.join(id_path, captions[0]),
                   os.path.join(id_path, identifier + '.srt'))
 
@@ -257,6 +263,8 @@ def download_video_and_subs(identifier):
         subprocess.check_call(['ia', 'download', '--glob=*.srt', identifier])
     except Exception as e:
         print("Error while downloading from internet archive", e)
+        return identifier
+
 
 
 def upload_video_and_subs_to_cloud(args):
