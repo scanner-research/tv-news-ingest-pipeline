@@ -169,7 +169,8 @@ def main(in_path, captions, out_path, host,
     if captions is not None:
         if (script and script == 'captions_copy') \
                 or (not script and 'captions_copy' not in disable):
-            copy_captions(captions, out_path)
+            from components import copy_captions
+            copy_captions.main(captions, out_path)
 
         if (script and script == 'caption_alignment') \
                 or (not script and 'caption_alignment' not in disable):
@@ -222,17 +223,6 @@ def run_scanner_component(in_path, out_path, video_dirpaths, disable=None,
     run_command_in_container(cmd, in_path, out_path, video_dirpaths, host, service)
 
 
-def prepare_docker_container(host=DEFAULT_HOST, service=DEFAULT_SERVICE):
-    try:
-        pull_container(host, service)
-    except subprocess.CalledProcessError as err:
-        raise PipelineException(
-            ('Could not connect to docker daemon at http://{host}. '
-             'Try running to following command: '
-             '`sudo dockerd -H tcp://{host} --log-level error &`').format(host=host)
-        )
-
-
 def build_scanner_component_command(in_path, out_path, disable=None,
                                     init_run=False, force_rerun=False):
     cmd = ['python3', 'components/scanner_component.py', in_path, out_path]
@@ -250,27 +240,6 @@ def build_scanner_component_command(in_path, out_path, disable=None,
         cmd.append('-f')
 
     return ' '.join(cmd)
-
-
-def copy_captions(in_path, out_dir):
-    if in_path.endswith('.srt'):
-        caption_paths = [in_path]
-        out_paths = [
-            os.path.join(out_dir, get_base_name(in_path), FILE_CAPTIONS_ORIG)
-        ]
-
-    else:
-        with open(in_path, 'r') as f:
-            caption_paths = [l.strip() for l in f if l.strip()]
-        video_names = [get_base_name(p) for p in caption_paths]
-        out_paths = [os.path.join(out_dir, v, FILE_CAPTIONS_ORIG)
-                     for v in video_names]
-
-    for captions, out_path in zip(tqdm(caption_paths,
-        desc='Copying original captions', unit='video'), out_paths
-    ):
-        if not os.path.exists(out_path):
-            shutil.copy(captions, out_path)
 
 
 if __name__ == '__main__':

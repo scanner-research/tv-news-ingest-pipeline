@@ -1,5 +1,6 @@
 from multiprocessing import Pool
 import os
+from pathlib import Path
 
 import pysrt
 from rekall import Interval, IntervalSet, IntervalSetMapping, Bounds3D
@@ -29,54 +30,64 @@ MAX_MERGE_DURATION = 300
 
 def main(in_path, out_path, force=False):
     video_names = os.listdir(in_path)
-    out_paths = [os.path.join(out_path, name) for name in video_names]
+    out_paths = [Path(out_path)/name for name in video_names]
+    in_path = Path(in_path)
 
     for p in out_paths:
-        os.makedirs(p, exist_ok=True)
+        p.mkdir(parents=True, exist_ok=True)
+
+    # Prune videos that should not be run
+    msg = []
+    for i in range(len(video_names) - 1, -1, -1):
+        black_frames_path = in_path/video_names[i]/FILE_BLACK_FRAMES
+        captions_path = in_path/video_names[i]/FILE_CAPTIONS
+        metadata_path = in_path/video_names[i]/FILE_METADATA
+        commercials_outpath = out_paths[i]/FILE_COMMERCIALS
+        if not black_frames_path.exists():
+            msg.append("Skipping commercial detection for video '{}': '{}' "
+                       "does not exists.".format(video_names[i], black_frames_path))
+        elif not captions_path.exists():
+            msg.append("Skipping commercial detection for video '{}': '{}' "
+                       "does not exists.".format(video_names[i], captions_path))
+        elif not metadata_path.exists():
+            msg.append("Skipping commercial detection for video '{}': '{}' "
+                       "does not exists.".format(video_names[i], metadata_path))
+        elif not force and commercials_outpath.exists():
+            msg.append("Skipping commercial detection for video '{}': '{}' "
+                       "already exists.".format(video_names[i], commercials_outpath))
+        else:
+            continue
+
+        video_names.pop(i)
+        out_paths.pop(i)
+
+    if not video_names:
+        print('All videos have existing detected commercials.')
+        return
+
+    if msg:
+        print(*msg, sep='\n')
+
 
     with Pool() as workers, tqdm(
         total=len(video_names), desc='Detecting commercials', unit='video'
     ) as pbar:
         for video_name, output_dir in zip(video_names, out_paths):
-            black_frames_path = os.path.join(in_path, video_name,
-                                             FILE_BLACK_FRAMES)
-            if not os.path.exists(black_frames_path):
-                tqdm.write("Skipping commercial detection for video '{}': file "
-                    "'{}' is missing!".format(video_name, FILE_BLACK_FRAMES))
-                pbar.update()
-                continue
+            black_frames_path = in_path/video_name/FILE_BLACK_FRAMES
+            captions_path = in_path/video_name/FILE_CAPTIONS
+            metadata_path = in_path/video_name/FILE_METADATA
+            commercials_outpath = output_dir/FILE_COMMERCIALS
 
-            captions_path = os.path.join(in_path, video_name, FILE_CAPTIONS)
-            if not os.path.exists(captions_path):
-                tqdm.write("Skipping commercial detection for video '{}': file "
-                    "'{}' is missing!".format(video_name, FILE_CAPTIONS))
-                pbar.update()
-                continue
-
-            metadata_path = os.path.join(in_path, video_name, FILE_METADATA)
-            if not os.path.exists(metadata_path):
-                tqdm.write("Skipping commercial detection for video '{}': file "
-                    "'{}' is missing!".format(video_name, FILE_METADATA))
-                pbar.update()
-                continue
-
-            commercials_outpath = os.path.join(output_dir, FILE_COMMERCIALS)
-
-            if force or not os.path.exists(commercials_outpath):
-                workers.apply_async(
-                    process_single,
-                    args=(black_frames_path, captions_path, metadata_path, 
-                          commercials_outpath),
-                    callback=lambda x: pbar.update()
-                )
-            else:
-                tqdm.write("Skipping commercial detection for video '{}': "
-                    "'{}' already exists!".format(video_name, FILE_COMMERCIALS))
-                pbar.update()
+            workers.apply_async(
+                process_single,
+                args=(str(black_frames_path), str(captions_path),
+                      str(metadata_path), str(commercials_outpath)),
+                callback=lambda x: pbar.update()
+            )
 
         workers.close()
         workers.join()
-    
+
 
 def process_single(black_frames_path, captions_path, metadata_path,
                    commercials_outpath):
@@ -85,7 +96,7 @@ def process_single(black_frames_path, captions_path, metadata_path,
     black_frames = load_json(black_frames_path)
     captions = load_captions(captions_path)
     metadata = load_json(metadata_path)
-    
+
     # Create IntervalSet objects
     black_frames_set = IntervalSet([
         Interval(Bounds3D(
@@ -101,7 +112,7 @@ def process_single(black_frames_path, captions_path, metadata_path,
     whole_video = IntervalSet([
         Interval(Bounds3D(0, metadata['frames'] / metadata['fps']))
     ])
-    
+
     # Detect commercials
     results = detect_commercials(black_frames_set, captions_set, whole_video)
 
@@ -195,17 +206,17 @@ def detect_commercials(black_frames, captions, whole_video, params=None):
                 stack.append(interval)
 
         return stack
-    
+
     commercials = commercial_blocks.fold_to_set(
         fold_fn, init=[]
     ).filter_size(min_size=MIN_COMMERCIAL_TIME)
     commercials_orig = commercials
-    
+
     def is_lower_text(obj):
         alpha = [c for c in obj['payload'] if c.isalpha()]
         if not alpha:
             return False
-        
+
         lower = [c for c in alpha if c.islower()]
         return len(lower) / len(alpha) > MIN_LOWERTEXT
 
@@ -243,7 +254,7 @@ def detect_commercials(black_frames, captions, whole_video, params=None):
     ).coalesce(
         ('t1', 't2'), Bounds3D.span
     )
-    
+
     return commercials
 
 
@@ -266,7 +277,7 @@ def convert_set_from_seconds_to_frames(interval_set, fps):
         curr_bounds['t2'] = int(curr_bounds['t2'] * fps)
         interval_copy['bounds'] = curr_bounds
         return interval_copy
-    
+
     return interval_set.map(map_fn)
 
 

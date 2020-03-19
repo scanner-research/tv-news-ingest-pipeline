@@ -23,7 +23,7 @@ def main(in_path, out_path, force=False):
     in_path = Path(in_path)
 
     for p in out_paths:
-        p.mkdir(exist_ok=True)
+        p.mkdir(parents=True, exist_ok=True)
 
     # Prune videos that should not be run
     msg = []

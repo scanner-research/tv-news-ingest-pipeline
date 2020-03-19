@@ -547,7 +547,7 @@ def main(video_in_path, transcript_in_path, out_path, force=False):
     out_paths = [Path(out_path)/name for name in video_names]
 
     for p in out_paths:
-        p.mkdir(exist_ok=True)
+        p.mkdir(parents=True, exist_ok=True)
 
     msg = []
     for i in range(len(video_names) - 1, -1, -1):

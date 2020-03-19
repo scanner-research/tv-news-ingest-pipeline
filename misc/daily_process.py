@@ -57,7 +57,7 @@ def get_args():
                         help=('The year for which to download videos. If not '
                               'specified, defaults to year it was yesterday.'))
     parser.add_argument('--local-out-path', default=DOWNLOAD_DIR,
-                        help='Directory to save videos and captions to. ')
+                        help='Directory to save videos and captions to.')
     parser.add_argument('--gcs-video-path', default=GCS_VIDEOS_DIR,
                         help=('The path in Google cloud to which videos should '
                               'be uploaded.'))
@@ -98,7 +98,8 @@ def main(year, local_out_path, gcs_video_path, gcs_caption_path, num_processes):
     subprocess.check_call(cmd)
 
 
-def upload_all_pipeline_outputs_to_cloud(out_path, downloaded, num_processes, gcs_output_path):
+def upload_all_pipeline_outputs_to_cloud(out_path, downloaded, num_processes,
+                                         gcs_output_path):
     print('Uploading {} video outputs on {} threads'.format(len(downloaded),
             num_processes))
 
@@ -122,16 +123,16 @@ def upload_pipeline_output_to_cloud(args):
 
     if os.path.exists(identifier):
         # does not upload crops
-        cmd = ['gsutil', '-m', 'cp', '-n', os.path.join(identifier, '*'), os.path.join(gcs_output_path, identifier)]
-        print('COMMAND', cmd)
+        cmd = ['gsutil', '-m', 'cp', '-n', os.path.join(identifier, '*'),
+               os.path.join(gcs_output_path, identifier)]
         subprocess.check_call(cmd)
 
         cmd = ['sudo', 'rm', '-rf', identifier]
-        print('COMMAND', cmd)
         subprocess.check_call(cmd)
 
 
-def upload_processed_videos_to_cloud(local_out_path, downloaded, num_processes, gcs_video_path, gcs_caption_path):
+def upload_processed_videos_to_cloud(local_out_path, downloaded, num_processes,
+                                     gcs_video_path, gcs_caption_path):
     print('Uploading {} videos on {} threads'.format(len(downloaded), num_processes))
     # Change the current working directory so we download all files into the
     # local_out_path
@@ -144,7 +145,9 @@ def upload_processed_videos_to_cloud(local_out_path, downloaded, num_processes, 
         [(i, gcs_video_path, gcs_caption_path) for i in downloaded]
     ):
         num_done+=1
-        print("Finished uploading {} of {} in {} seconds".format(num_done, len(downloaded), time.time() - start_time))
+        print("Finished uploading {} of {} in {} seconds".format(
+            num_done, len(downloaded), time.time() - start_time
+        ))
 
     os.chdir(orig_path)
 
@@ -188,7 +191,9 @@ def download_unprocessed_videos(year, local_out_path, gcs_video_path,
     start_time = time.time()
     for _ in pool.imap_unordered(download_video_and_subs, to_download):
         num_done+=1
-        print("Finished downloading {} of {} in {} seconds".format(num_done, len(to_download), time.time() - start_time))
+        print("Finished downloading {} of {} in {} seconds".format(
+            num_done, len(to_download), time.time() - start_time
+        ))
 
     os.chdir(orig_path)
     return to_download
@@ -250,6 +255,7 @@ def list_ia_videos(year):
                     identifiers.append(identifier)
 
     return identifiers
+
 
 def download_video_and_subs(identifier):
     try:
