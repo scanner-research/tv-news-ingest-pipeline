@@ -30,7 +30,7 @@ def main(in_path, out_path, force=False):
     for i in range(len(video_names) - 1, -1, -1):
         identities_path = in_path/video_names[i]/FILE_IDENTITIES
         embeds_path = in_path/video_names[i]/FILE_EMBEDS
-        prop_outpath = out_paths[i]/FILE_IDENTITIES
+        prop_outpath = out_paths[i]/FILE_IDENTITIES_PROP
 
         if not identities_path.exists():
             msg.append("Skipping identity propagation for video '{}': '{}' "

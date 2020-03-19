@@ -79,6 +79,8 @@ def main(in_path, out_path, init_run=False, force=False):
         subprocess.run(cmd, input=path_str.encode('utf-8'), check=True)
         pbar.update()
 
+    pbar.close()
+
 
 def get_videos_to_process(video_paths, out_paths, skip=False):
     """
