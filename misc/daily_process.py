@@ -303,7 +303,7 @@ def lock_script() -> bool:
         True if the lock was acquired, False otherwise.
 
     """
-
+    global lockfile
     lockfile = '/tmp/{}.lock'.format(Path(__file__).name)
 
     try:

@@ -238,6 +238,7 @@ def lock_script() -> bool:
 
     """
 
+    global lockfile
     lockfile = '/tmp/{}.lock'.format(Path(__file__).name)
 
     try:
