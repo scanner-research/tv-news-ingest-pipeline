@@ -12,9 +12,11 @@ in gs://esper/tvnews/videos, in order to catch up.
 import argparse
 import errno
 import fcntl
+from multiprocessing import Pool
 import os
 from pathlib import Path
 import subprocess
+import time
 
 WORKING_DIR = '.catch_up_tmp'
 DOWNLOAD_DIR = os.path.join(WORKING_DIR, 'downloads')
@@ -76,8 +78,6 @@ def main(date_prefix, local_out_path, gcs_video_path, gcs_caption_path,
 
     upload_all_pipeline_outputs_to_cloud(PIPELINE_OUTPUT_DIR, downloaded,
                                          num_processes, GCS_OUTPUT_DIR)
-    upload_processed_videos_to_cloud(local_out_path, downloaded, gcs_video_path,
-                                     gcs_caption_path)
 
     # Clean up
     shutil.rmtree(WORKING_DIR)
@@ -209,30 +209,6 @@ def upload_all_pipeline_outputs_to_cloud(out_path, downloaded, num_processes,
         num_done += 1
         print('Finished uploading {} of {} in {} seconds'.format(num_done,
                 len(downloaded), time.time() - start_time))
-
-    os.chdir(orig_path)
-
-
-def upload_processed_videos_to_cloud(local_out_path, downloaded,
-                                     gcs_video_path, gcs_caption_path):
-    print('Uploading {} videos'.format(len(downloaded)))
-
-    # Change the current working directory so we download all files into the
-    # local_out_path
-    orig_path = os.getcwd()
-    os.chdir(local_out_path)
-
-    cmd = ['gsutil', '-m', 'cp', '-n']
-    for identifier in downloaded:
-        cmd.append('{}/{}.mp4'.format(local_out_path, identifier))
-    cmd.append(gcs_video_path)
-    subprocess.run(cmd, check=True)
-
-    cmd = ['gsutil', '-m', 'cp', '-n']
-    for identifier in downloaded:
-        cmd.append('{}/{}.srt'.format(local_path, identifier))
-    cmd.append(gcs_caption_path)
-    subprocess.run(cmd, check=True)
 
     os.chdir(orig_path)
 
