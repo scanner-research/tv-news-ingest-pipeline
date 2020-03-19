@@ -102,6 +102,7 @@ def get_videos_to_process(video_paths, out_paths, skip=False):
         for i in range(len(video_names) - 1, -1, -1):
             if json_is_valid(out_paths[i]/FILE_BLACK_FRAMES):
                 video_names.pop(i)
+                video_paths.pop(i)
                 out_paths.pop(i)
 
     return video_names
