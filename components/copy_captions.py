@@ -1,5 +1,6 @@
 from pathlib import Path
 import shutil
+import tqdm
 
 from util.consts import FILE_CAPTIONS_ORIG
 
