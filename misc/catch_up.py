@@ -16,11 +16,11 @@ import os
 from pathlib import Path
 import subprocess
 
-WORKING_DIR = Path('.catch_up_tmp')
-DOWNLOAD_DIR = WORKING_DIR/'downloads'
-BATCH_VIDEOS_PATH = WORKING_DIR/'batch_videos.txt'
-BATCH_CAPTIONS_PATH = WORKING_DIR/'batch_captions.txt'
-PIPELINE_OUTPUT_DIR = WORKING_DIR/'pipeline_output'
+WORKING_DIR = '.catch_up_tmp'
+DOWNLOAD_DIR = os.path.join(WORKING_DIR, 'downloads')
+BATCH_VIDEOS_PATH = os.path.join(WORKING_DIR, 'batch_videos.txt')
+BATCH_CAPTIONS_PATH = os.path.join(WORKING_DIR, 'batch_captions.txt')
+PIPELINE_OUTPUT_DIR = os.path.join(WORKING_DIR, 'pipeline_output')
 
 NUM_PROCS = os.cpu_count() if os.cpu_count() else 1
 GCS_VIDEOS_DIR = 'gs://esper/tvnews/videos'
@@ -29,13 +29,13 @@ GCS_OUTPUT_DIR = 'gs://esper/tvnews/ingest-pipeline/outputs'
 
 PREFIXES = ['MSNBC', 'MSNBCW', 'CNN', 'CNNW', 'FOXNEWS', 'FOXNEWSW']
 
-MAX_VIDEO_DOWNLOADS = 10
+MAX_VIDEO_DOWNLOADS = 100
 
 
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--date-prefix', help='the date prefix to search.')
-    parser.add_argument('--local-out-path', default=str(DOWNLOAD_DIR),
+    parser.add_argument('--local-out-path', default=DOWNLOAD_DIR,
                         help='Directory to save videos and captions to.')
     parser.add_argument('--gcs-video-path', default=GCS_VIDEOS_DIR,
                         help='The path in Google cloud where the videos are stored.')
@@ -175,21 +175,21 @@ def list_processed_videos(date_prefix, gcs_output_path):
 def create_batch_files(local_out_path, downloaded):
     # Batch videos file
     with open(BATCH_VIDEOS_PATH, 'w') as f:
-        lines = [os.path.join(local_out_path, i, i + '.mp4') for i in downloaded]
+        lines = [os.path.join(local_out_path, i + '.mp4') for i in downloaded]
         f.write('\n'.join(lines))
 
     # Rename transcripts
     for identifier in downloaded:
-        id_path = os.path.join(local_out_path, identifier)
-        files = os.listdir(id_path)
+        files = os.listdir(local_out_path)
+        files = list(filter(lambda x: x.startswith(identifier), files))
         captions = list(filter(lambda x: x.endswith('.srt'), files))
         captions = sorted(list(filter(lambda x: '.cc' in x, captions)))
-        os.rename(os.path.join(id_path, captions[0]),
-                  os.path.join(id_path, identifier + '.srt'))
+        os.rename(os.path.join(local_out_path, captions[0]),
+                  os.path.join(local_out_path, identifier + '.srt'))
 
     # Batch captions file
     with open(BATCH_CAPTIONS_PATH, 'w') as f:
-        lines = [os.path.join(local_out_path, i, i + '.srt') for i in downloaded]
+        lines = [os.path.join(local_out_path, i + '.srt') for i in downloaded]
         f.write('\n'.join(lines))
 
 
@@ -215,7 +215,7 @@ def upload_all_pipeline_outputs_to_cloud(out_path, downloaded, num_processes,
 
 def upload_processed_videos_to_cloud(local_out_path, downloaded,
                                      gcs_video_path, gcs_caption_path):
-    print('Uploading {} videos'.format(len(downloaded))
+    print('Uploading {} videos'.format(len(downloaded)))
 
     # Change the current working directory so we download all files into the
     # local_out_path
