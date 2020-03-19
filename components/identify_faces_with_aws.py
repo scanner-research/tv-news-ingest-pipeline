@@ -64,7 +64,7 @@ def main(in_path, out_path, force=False):
     out_paths = [Path(out_path)/name for name in video_names]
     in_path = Path(in_path)
     for p in out_paths:
-        p.mkdir(exist_ok=True)
+        p.mkdir(parents=True, exist_ok=True)
 
     # Prune videos that should not be run
     msg = []

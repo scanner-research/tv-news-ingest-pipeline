@@ -55,7 +55,7 @@ def main(year, local_out_path, gcs_output_path, num_processes):
     subprocess.check_call(cmd)
 
     os.chdir('../esper-tv-widget')
-    subprocess.check_call(['python3', 'derive_data.py', '-t', '1000'])
+    subprocess.check_call(['python3', 'derive_data.py', '-i'])
 
     print('Cleaning up local files.')
     shutil.rmtree(LOCAL_OUTPUT_PATH)
@@ -75,7 +75,9 @@ def download_unprepared_outputs(year, local_out_path, gcs_output_path, num_proce
 
     processed_outputs = list_processed_outputs()
 
-    to_download = available_outputs # - processed_outputs
+    to_download = available_outputs - processed_outputs
+    if not to_download:
+        return []
 
     print('Downloading {} video outputs on {} threads'.format(len(to_download), num_processes))
 
@@ -115,7 +117,6 @@ def list_pipeline_outputs(year, gcs_output_path):
             ).decode()
 
             videos |= {parse_identifier(x) for x in output.split('\n') if x.strip()}
-            print(videos)
         except subprocess.CalledProcessError as e:
             pass
 
