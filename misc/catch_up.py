@@ -72,7 +72,7 @@ def main(date_prefix, local_out_path, gcs_video_path, gcs_caption_path,
 
     create_batch_files(local_out_path, downloaded)
 
-    cmd = ['python3', 'pipeline.py', BATCH_VIDEOS_PATH, '--captions',
+    cmd = ['/usr/bin/python3', 'pipeline.py', BATCH_VIDEOS_PATH, '--captions',
            BATCH_CAPTIONS_PATH, PIPELINE_OUTPUT_DIR]
     subprocess.run(cmd, check=True)
 
@@ -81,7 +81,7 @@ def main(date_prefix, local_out_path, gcs_video_path, gcs_caption_path,
 
     # Clean up
     shutil.rmtree(WORKING_DIR)
-    cmd = ['sudo', 'docker', '--host', '127.0.0.1:2375', 'container', 'prune',
+    cmd = ['sudo', '/usr/bin/docker', '--host', '127.0.0.1:2375', 'container', 'prune',
            '-f']
     subprocess.check_call(cmd)
 
@@ -107,7 +107,7 @@ def download_unprocessed_videos(date_prefix, local_out_path, gcs_video_path,
     orig_path = os.getcwd()
     os.chdir(str(local_out_path))
 
-    cmd = ['gsutil', '-m', 'cp', '-n']
+    cmd = ['/snap/bin/gsutil', '-m', 'cp', '-n']
     for identifier in to_download:
         cmd.append(os.path.join(gcs_video_path, identifier) + '.mp4')
         cmd.append(os.path.join(gcs_caption_path, identifier + '*.srt'))
@@ -138,13 +138,13 @@ def list_available_videos(date_prefix, gcs_video_path, gcs_caption_path):
 
     for prefix in PREFIXES:
         try:
-            cmd = ['gsutil', 'ls',
+            cmd = ['/snap/bin/gsutil', 'ls',
                    '{}/{}_{}*'.format(gcs_video_path, prefix, date_prefix)]
             proc = subprocess.run(cmd, stdout=subprocess.PIPE, check=True)
             output = proc.stdout.decode()
             videos |= {Path(x).stem for x in output.split('\n') if x.strip()}
 
-            cmd = ['gsutil', 'ls',
+            cmd = ['/snap/bin/gsutil', 'ls',
                    '{}/{}_{}*'.format(gcs_caption_path, prefix, date_prefix)]
             proc = subprocess.run(cmd, stdout=subprocess.PIPE, check=True)
             output = proc.stdout.decode()
@@ -161,7 +161,7 @@ def list_processed_videos(date_prefix, gcs_output_path):
 
     for prefix in PREFIXES:
         try:
-            cmd = ['gsutil', 'ls', '-d',
+            cmd = ['/snap/bin/gsutil', 'ls', '-d',
                    '{}/{}_{}*'.format(gcs_output_path, prefix, date_prefix)]
             proc = subprocess.run(cmd, stdout=subprocess.PIPE, check=True)
             output = proc.stdout.decode()
@@ -218,7 +218,7 @@ def upload_pipeline_output_to_cloud(args):
 
     if os.path.exists(identifier):
         # does not upload crops
-        cmd = ['gsutil', '-m', 'cp', '-n', os.path.join(identifier, '*'),
+        cmd = ['/snap/bin/gsutil', '-m', 'cp', '-n', os.path.join(identifier, '*'),
                os.path.join(gcs_output_path, identifier)]
         subprocess.check_call(cmd)
 

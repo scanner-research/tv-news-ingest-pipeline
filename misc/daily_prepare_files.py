@@ -51,11 +51,11 @@ def main(year, local_out_path, gcs_output_path, num_processes):
         print('There are no video outputs to prepare at this time. Exiting.')
         return
 
-    cmd = ['python3', 'prepare_files_for_viewer.py', '-u', LOCAL_OUTPUT_PATH, APP_DATA_PATH, '--index-dir', INDEX_PATH]
+    cmd = ['/usr/bin/python3', 'prepare_files_for_viewer.py', '-u', LOCAL_OUTPUT_PATH, APP_DATA_PATH, '--index-dir', INDEX_PATH]
     subprocess.check_call(cmd)
 
     os.chdir('../esper-tv-widget')
-    subprocess.check_call(['python3', 'derive_data.py', '-i'])
+    subprocess.check_call(['/usr/bin/python3', 'derive_data.py', '-i'])
 
     print('Cleaning up local files.')
     shutil.rmtree(LOCAL_OUTPUT_PATH)
@@ -96,7 +96,7 @@ def download_unprepared_outputs(year, local_out_path, gcs_output_path, num_proce
 
 def download_pipeline_output(args):
     identifier, gcs_output_path, local_out_path = args
-    subprocess.check_call(['gsutil', '-m', 'cp', '-nr', os.path.join(gcs_output_path, identifier), './'])
+    subprocess.check_call(['/snap/bin/gsutil', '-m', 'cp', '-nr', os.path.join(gcs_output_path, identifier), './'])
 
 
 def list_processed_outputs():
@@ -113,7 +113,7 @@ def list_pipeline_outputs(year, gcs_output_path):
     for prefix in PREFIXES:
         try:
             output = subprocess.check_output(
-                ['gsutil', 'ls', '-d', '{}/{}_{}*'.format(gcs_output_path, prefix, year)]
+                ['/snap/bin/gsutil', 'ls', '-d', '{}/{}_{}*'.format(gcs_output_path, prefix, year)]
             ).decode()
 
             videos |= {parse_identifier(x) for x in output.split('\n') if x.strip()}

@@ -82,7 +82,7 @@ def main(year, local_out_path, gcs_video_path, gcs_caption_path, num_processes):
 
     create_batch_files(local_out_path, downloaded)
 
-    cmd = ['python3', 'pipeline.py', BATCH_VIDEOS_PATH, '--captions',
+    cmd = ['/usr/bin/python3', 'pipeline.py', BATCH_VIDEOS_PATH, '--captions',
            BATCH_CAPTIONS_PATH, PIPELINE_OUTPUT_DIR]
     subprocess.check_call(cmd)
 
@@ -94,7 +94,7 @@ def main(year, local_out_path, gcs_video_path, gcs_caption_path, num_processes):
     # Clean up
     print('Cleaning up files.')
     shutil.rmtree(WORKING_DIR)
-    cmd = ['sudo', 'docker', '--host', '127.0.0.1:2375', 'container', 'prune',
+    cmd = ['sudo', '/usr/bin/docker', '--host', '127.0.0.1:2375', 'container', 'prune',
            '-f']
     subprocess.check_call(cmd)
     
@@ -126,7 +126,7 @@ def upload_pipeline_output_to_cloud(args):
 
     if os.path.exists(identifier):
         # does not upload crops
-        cmd = ['gsutil', '-m', 'cp', '-n', os.path.join(identifier, '*'),
+        cmd = ['/snap/bin/gsutil', '-m', 'cp', '-n', os.path.join(identifier, '*'),
                os.path.join(gcs_output_path, identifier)]
         subprocess.check_call(cmd)
 
@@ -176,7 +176,7 @@ def download_unprocessed_videos(year, local_out_path, gcs_video_path,
         if video in downloaded:
             continue
         # This prints results directly to the terminal
-        status = subprocess.call(['ia', 'list', video, '--glob=*.mp4'])
+        status = subprocess.call(['/usr/local/bin/ia', 'list', video, '--glob=*.mp4'])
         # If there is no video, the list will return a nonzero status
         if status == 0:
             to_download.append(video)
@@ -240,7 +240,7 @@ def list_downloaded_videos(year, gcs_video_path):
     for prefix in PREFIXES:
         try:
             output = subprocess.check_output(
-                ['gsutil', 'ls', '{}/{}_{}*'.format(gcs_video_path, prefix, year)]).decode()
+                ['/snap/bin/gsutil', 'ls', '{}/{}_{}*'.format(gcs_video_path, prefix, year)]).decode()
             videos |= {parse_ia_identifier(x) for x in output.split('\n') if x.strip()}
         except subprocess.CalledProcessError as e:
             # It's probably just no matches, which is fine
@@ -253,7 +253,7 @@ def list_ia_videos(year):
     identifier_re = re.compile(r'^[A-Z]+_[0-9]{8}_', re.IGNORECASE)
     for p in PREFIXES:
         query_string = '{}_{}'.format(p, year)
-        output = subprocess.check_output(['ia', 'search', query_string]).decode()
+        output = subprocess.check_output(['/usr/local/bin/ia', 'search', query_string]).decode()
         for line in output.split('\n'):
             line = line.strip()
             if line:
@@ -266,8 +266,8 @@ def list_ia_videos(year):
 
 def download_video_and_subs(identifier):
     try:
-        subprocess.check_call(['ia', 'download', '--glob=*.mp4', identifier])
-        subprocess.check_call(['ia', 'download', '--glob=*.srt', identifier])
+        subprocess.check_call(['/usr/local/bin/ia', 'download', '--glob=*.mp4', identifier])
+        subprocess.check_call(['/usr/local/bin/ia', 'download', '--glob=*.srt', identifier])
     except Exception as e:
         print("Error while downloading from internet archive", e)
         return identifier
@@ -282,11 +282,11 @@ def upload_video_and_subs_to_cloud(args):
             if fname.endswith('.mp4'):
                 local_path = os.path.join(identifier, fname)
                 cloud_path = os.path.join(gcs_video_path, fname)
-                subprocess.check_call(['gsutil', 'cp', '-n', local_path, cloud_path])
+                subprocess.check_call(['/snap/bin/gsutil', 'cp', '-n', local_path, cloud_path])
             if fname.endswith('.srt') and gcs_caption_path is not None:
                 local_path = os.path.join(identifier, fname)
                 cloud_path = os.path.join(gcs_caption_path, fname)
-                subprocess.check_call(['gsutil', 'cp', '-n', local_path, cloud_path])
+                subprocess.check_call(['/snap/bin/gsutil', 'cp', '-n', local_path, cloud_path])
 
         # FIXME: probably want to keep the video files around locally
         # shutil.rmtree(identifier)
