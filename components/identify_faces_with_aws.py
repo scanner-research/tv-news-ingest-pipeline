@@ -73,7 +73,7 @@ def main(in_path, out_path, force=False):
         if not crops_path.is_dir():
             msg.append("Skipping face identification for video '{}': no '{}' "
                        "directory found.".format(video_names[i], DIR_CROPS))
-            videos_names.pop(i)
+            video_names.pop(i)
             out_paths.pop(i)
             continue
 
