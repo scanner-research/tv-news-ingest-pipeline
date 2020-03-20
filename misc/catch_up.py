@@ -71,6 +71,10 @@ def main(date_prefix, local_out_path, gcs_video_path, gcs_caption_path,
                                              gcs_video_path, gcs_caption_path,
                                              gcs_output_path)
 
+    if not downloaded:
+        print('No videos to download for date-prefix=' + date_prefix)
+        return
+
     create_batch_files(local_out_path, downloaded)
 
     cmd = ['/usr/bin/python3', 'pipeline.py', BATCH_VIDEOS_PATH, '--captions',
