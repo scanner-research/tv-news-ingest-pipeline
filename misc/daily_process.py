@@ -204,22 +204,23 @@ def download_unprocessed_videos(year, local_out_path, gcs_video_path,
 
 
 def create_batch_files(local_out_path, downloaded):
-    # Batch videos file
-    with open(BATCH_VIDEOS_PATH, 'w') as f:
-        lines = [os.path.join(local_out_path, i, i + '.mp4') for i in downloaded]
-        f.write('\n'.join(lines))
-
     # Rename transcripts
-    for identifier in downloaded:
+    for identifier in downloaded[:]:
         id_path = os.path.join(local_out_path, identifier)
         files = os.listdir(id_path)
         captions = list(filter(lambda x: x.endswith('.srt'), files))
         captions = sorted(list(filter(lambda x: '.cc' in x, captions)))
         if not captions:
             print('No captions for ', identifier)
-            exit(1)
-        os.rename(os.path.join(id_path, captions[0]),
-                  os.path.join(id_path, identifier + '.srt'))
+            downloaded.remove(identifier)
+        else:
+            os.rename(os.path.join(id_path, captions[0]),
+                      os.path.join(id_path, identifier + '.srt'))
+
+    # Batch videos file
+    with open(BATCH_VIDEOS_PATH, 'w') as f:
+        lines = [os.path.join(local_out_path, i, i + '.mp4') for i in downloaded]
+        f.write('\n'.join(lines))
 
     # Batch captions file
     with open(BATCH_CAPTIONS_PATH, 'w') as f:
