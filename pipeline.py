@@ -9,23 +9,23 @@ Given a video filepath or textfile containing a list of video filepaths, this
 script takes the video(s) through the following stages:
 
     - scanner component (scanner_component.py)
-        - face detection
-        - face embeddings
-        - face image crops
+        - detect faces
+        - compute face embeddings
+        - extract face image crops
 
-    - black frame detection (black_frame_detection.py)
+    - detect black frames (black_frame_detection.py)
 
-    - face identification (identify_faces_with_aws.py)
+    - identify faces (identify_faces_with_aws.py)
 
     - propogate identities to unlabeled faces (identity_propogation.py)
 
-    - gender classification (classify_gender.py)
+    - classify gender (classify_gender.py)
 
-    - copies original captions
+    - copy original captions
 
-    - time aligns captions (caption_alignment.py)
+    - time align captions (caption_alignment.py)
 
-    - detects commercials (commercial_detection.py)
+    - detect commercials (commercial_detection.py)
 
 
 Sample output directory after pipeline completion:
@@ -53,8 +53,6 @@ Sample output directory after pipeline completion:
 """
 
 import argparse
-import glob
-from multiprocessing import Pool
 import os
 from pathlib import Path
 import shutil
@@ -65,10 +63,7 @@ from tqdm import tqdm
 
 from util import config
 from util.consts import FILE_CAPTIONS_ORIG
-from util.docker_compose_api import (pull_container,
-                                     run_command_in_container,
-                                     DEFAULT_HOST,
-                                     DEFAULT_SERVICE)
+from util.docker_compose_api import run_command_in_container
 from util.utils import get_base_name
 
 NAMED_COMPONENTS = [
@@ -91,6 +86,8 @@ class PipelineException(Exception):
 
 
 def get_args():
+    """Get command line arguments."""
+    
     parser = argparse.ArgumentParser()
     parser.add_argument('in_path', help=('path to mp4 or to a text file '
                                          'containing video filepaths'))
@@ -98,9 +95,6 @@ def get_args():
                                             'containing srt filepaths'))
     parser.add_argument('out_path', help='path to output directory')
     parser.add_argument('--host', help='docker host IP:port')
-    parser.add_argument('--service', type=str, default=DEFAULT_SERVICE,
-                        help='docker compose service for scanner',
-                        choices=['cpu', 'gpu'])
     parser.add_argument('-i', '--init-run', action='store_true',
                         help='running on videos for the first time')
     parser.add_argument('-f', '--force', action='store_true',
@@ -112,9 +106,24 @@ def get_args():
     return parser.parse_args()
 
 
-def main(in_path, captions, out_path, host,
-         service=DEFAULT_SERVICE, init_run=False, force=False,
+def main(in_path, captions, out_path, host=None, init_run=False, force=False,
          disable=None, script=None):
+    """
+    The entrypoint for the pipeline.
+
+    Args:
+        in_path (str): the path to the video file or batch file.
+        captions (str): the path to the captions file or batch captions file.
+        out_path (str): the path to the output directory.
+        host (Optional[str]): the host to connect to Docker on. Default None.
+        init_run (bool): whether this is the first time processing the videos.
+                         Default False.
+        force (bool): whether to overwrite existing outputs. Default False.
+        disable (Optional[List]): a list of components to disable.
+                                  Default None.
+        script (Optional[str]): a single component to run. Default None.
+    
+    """
 
     start = time.time()
 
@@ -143,12 +152,12 @@ def main(in_path, captions, out_path, host,
     if (script and script == 'scanner_component') \
             or (not script and 'scanner_component' not in disable):
         run_scanner_component(in_path, out_path, video_dirpaths, disable,
-                              init_run, force, host=host, service=service)
+                              init_run, force, host=host)
 
     if (script and script == 'black_frames') \
             or (not script and 'black_frames' not in disable):
         run_black_frame_detection(in_path, out_path, video_dirpaths, init_run,
-                force, host=host, service=service)
+                force, host=host)
 
     if (script and script == 'identities') \
             or (not script and 'identities' not in disable):
@@ -194,9 +203,11 @@ def create_output_dirs(in_path, out_path, single):
         in_path (str): path to a video file or batch text file containing
                        filepaths
         out_path (str): path to the output directory.
+        single (bool): whether the in_path is a single file or a batch.
 
     Returns:
-        a list of video filepaths and a list of output directory paths.
+        List[Path], List[Path]: a list of video filepaths and a list of output 
+            directory paths.
 
     """
 
@@ -213,38 +224,73 @@ def create_output_dirs(in_path, out_path, single):
     return video_paths, out_paths
 
 
-def run_scanner_component(in_path, out_path, video_dirpaths, disable=None,
-                          init_run=False, force_rerun=False,
-                          host=DEFAULT_HOST, service=DEFAULT_SERVICE):
+def run_scanner_component(in_path, out_path, video_dirpaths,
+                          disable, init_run, force, host):
+    """
+    Runs scanner_component.py in a docker container.
+
+    Args:
+        in_path (pathlib.Path): the path to the input file or batch file.
+        out_path (pathlib.Path): the path to the output directory.
+        video_dirpaths (List[pathlib.Path]): the paths to each videos parent 
+            directory.
+        disable (List[str]): a list of named components to disable.
+        init_run (bool): whether this is the first time processing the videos.
+        force (bool): whether existing outputs should be recomputed.
+        host (str): the IP/port that the Docker daemon is listening on.
+
+    """
+
     cmd = build_scanner_component_command(in_path, out_path, disable, init_run,
-                                          force_rerun)
-    run_command_in_container(cmd, in_path, out_path, video_dirpaths, host, service)
+                                          force)
+    run_command_in_container(cmd, in_path, out_path, video_dirpaths, host)
 
 
-def run_black_frame_detection(in_path, out_path, video_dirpaths, init_run=False,
-        force_rerun=False, host=DEFAULT_HOST, service=DEFAULT_SERVICE):
+def run_black_frame_detection(in_path, out_path, video_dirpaths,
+                              init_run, force, host):
+    """
+    Runs black_frame_detection.py in a docker container.
+
+    Args:
+        in_path (pathlib.Path): the path to the input file or batch file.
+        out_path (pathlib.Path): the path to the output directory.
+        video_dirpaths (List[pathlib.Path]): the paths to each videos parent 
+            directory.
+        disable (List[str]): a list of named components to disable.
+        init_run (bool): whether this is the first time processing the videos.
+        force (bool): whether existing outputs should be recomputed.
+        host (str): the IP/port that the Docker daemon is listening on.
+
+    """
+
     cmd = build_black_frame_detection_command(in_path, out_path, init_run,
-                                              force_rerun)
-    run_command_in_container(cmd, in_path, out_path, video_dirpaths, host, service)
+                                              force)
+    run_command_in_container(cmd, in_path, out_path, video_dirpaths, host)
 
 
-def prepare_docker_container(host=DEFAULT_HOST, service=DEFAULT_SERVICE):
-    try:
-        pull_container(host, service)
-    except subprocess.CalledProcessError as err:
-        raise PipelineException(
-            ('Could not connect to docker daemon at http://{host}. '
-             'Try running to following command: '
-             '`sudo dockerd -H tcp://{host} --log-level error &`').format(host=host)
-        )
+def build_scanner_component_command(in_path, out_path, disable,
+                                    init_run, force):
+    """
+    Builds a command to run scanner_component.py within a Docker container.
 
+    Args:
+        in_path (pathlib.Path): the path to the input file or batch file.
+        out_path (pathlib.Path): the path to the output directory.
+        disable (List[str]): a list of named components to disable.
+        init_run (bool): whether this is the first time processing the videos.
+        force (bool): whether existing outputs should be recomputed.
 
-def build_scanner_component_command(in_path, out_path, disable=None,
-                                    init_run=False, force_rerun=False):
+    Returns:
+        str: the command to run.
+
+    """
+
     cmd = ['python3', 'components/scanner_component.py', in_path, out_path]
     if disable:
-        scanner_parts = [x for x in disable
-                if x in ['face_detection', 'face_embeddings', 'face_crops']]
+        scanner_parts = [
+            x for x in disable
+            if x in ['face_detection', 'face_embeddings', 'face_crops']
+        ]
         if scanner_parts:
             cmd.append('-d')
             for d in scanner_parts:
@@ -252,24 +298,47 @@ def build_scanner_component_command(in_path, out_path, disable=None,
 
     if init_run:
         cmd.append('-i')
-    if force_rerun:
+
+    if force:
         cmd.append('-f')
 
     return ' '.join(cmd)
 
 
-def build_black_frame_detection_command(in_path, out_path, init_run=False,
-                                        force_rerun=False):
+def build_black_frame_detection_command(in_path, out_path, init_run, force):
+    """
+    Builds a command to run black_frame_detection.py within a Docker container.
+
+    Args:
+        in_path (pathlib.Path): the path to the input file or batch file.
+        out_path (pathlib.Path): the path to the output directory.
+        init_run (bool): whether this is the first time processing the videos.
+        force (bool): whether existing outputs should be recomputed.
+
+    Returns:
+        str: the command to run.
+
+    """
+
     cmd = ['python3', 'components/black_frame_detection.py', in_path, out_path]
     if init_run:
         cmd.append('-i')
-    if force_rerun:
+    if force:
         cmd.append('-f')
 
     return ' '.join(cmd)
 
 
 def copy_captions(in_path, out_dir):
+    """
+    Copies the original captions file to the output directory.
+
+    Args:
+        in_path (pathlib.Path): the path to the captions file or batch file.
+        out_dir (pathlib.Path): the path to the output directory.
+
+    """
+
     if in_path.endswith('.srt'):
         caption_paths = [in_path]
         out_paths = [
