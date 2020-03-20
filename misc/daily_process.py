@@ -150,6 +150,8 @@ def upload_all_pipeline_outputs_to_cloud(out_path, downloaded, num_processes,
         os.chdir(orig_path)
         return False
 
+    sync_with_server()
+
     pool = Pool(num_processes)
     num_done = 0
     start_time = time.time()
@@ -161,6 +163,9 @@ def upload_all_pipeline_outputs_to_cloud(out_path, downloaded, num_processes,
                 len(downloaded), time.time() - start_time))
 
     os.chdir(orig_path)
+
+    unsync_with_server()
+
     return True
 
 
@@ -244,6 +249,29 @@ def download_unprocessed_videos(year, local_out_path, gcs_video_path,
 
     os.chdir(orig_path)
     return to_download
+
+
+def sync_with_server():
+    while True:
+        cmd = ['gsutil', 'mv', 'gs://esper/tvnews/ingest-pipeline/tmp/.placeholder',
+               'gs://esper/tvnews/ingest-pipeline/tmp/.uploading']
+        proc = subprocess.run(cmd)
+        if proc.returncode == 0:
+            return
+
+        cmd = ['gsutil', 'ls', 'gs://esper/tvnews/ingest-pipeline/tmp/.downloading']
+        proc = subprocess.run(cmd)
+
+        if proc.returncode != 0:
+            return
+
+        time.sleep(60)
+
+
+def unsync_with_server():
+    cmd = ['gsutil', 'mv', 'gs://esper/tvnews/ingest-pipeline/tmp/.uploading',
+           'gs://esper/tvnews/ingest-pipeline/tmp/.placeholder']
+    subprocess.run(cmd, check=True)
 
 
 def create_batch_files(local_out_path, downloaded):

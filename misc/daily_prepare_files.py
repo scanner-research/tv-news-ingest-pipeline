@@ -73,12 +73,15 @@ def download_unprepared_outputs(year, local_out_path, gcs_output_path, num_proce
     if year is None:
         year = (datetime.datetime.now() - datetime.timedelta(days=1)).year
 
+    sync_with_worker()
+
     available_outputs = list_pipeline_outputs(year, gcs_output_path)
 
     processed_outputs = list_processed_outputs()
 
     to_download = available_outputs - processed_outputs
     if not to_download:
+        unsync_with_worker()
         return []
 
     print('Downloading {} video outputs on {} threads'.format(len(to_download), num_processes))
@@ -93,6 +96,7 @@ def download_unprepared_outputs(year, local_out_path, gcs_output_path, num_proce
         print("Finished downloading {} of {} in {} seconds".format(num_done, len(to_download), time.time() - start_time))
 
     os.chdir(orig_path)
+    unsync_with_worker()
     return to_download
 
 
@@ -123,6 +127,29 @@ def list_pipeline_outputs(year, gcs_output_path):
             pass
 
     return videos
+
+
+def sync_with_worker():
+    while True:
+        cmd = ['gsutil', 'mv', 'gs://esper/tvnews/ingest-pipeline/tmp/.placeholder',
+               'gs://esper/tvnews/ingest-pipeline/tmp/.downloading']
+        proc = subprocess.run(cmd)
+        if proc.returncode == 0:
+            return
+
+        cmd = ['gsutil', 'ls', 'gs://esper/tvnews/ingest-pipeline/tmp/.uploading']
+        proc = subprocess.run(cmd)
+
+        if proc.returncode != 0:
+            return
+
+        time.sleep(60)
+
+
+def unsync_with_worker():
+    cmd = ['gsutil', 'mv', 'gs://esper/tvnews/ingest-pipeline/tmp/.downloading',
+           'gs://esper/tvnews/ingest-pipeline/tmp/.placeholder']
+    subprocess.run(cmd, check=True)
 
 
 def lock_script() -> bool:
