@@ -247,6 +247,21 @@ def run_scanner_component(in_path, out_path, video_dirpaths,
                                           force)
     run_command_in_container(cmd, in_path, out_path, video_dirpaths, host)
 
+
+def build_scanner_component_command(in_path, out_path, disable,
+                                    init_run, force):
+    """
+    Builds a command to run scanner_component.py within a Docker container.
+    Args:
+        in_path (pathlib.Path): the path to the input file or batch file.
+        out_path (pathlib.Path): the path to the output directory.
+        disable (List[str]): a list of named components to disable.
+        init_run (bool): whether this is the first time processing the videos.
+        force (bool): whether existing outputs should be recomputed.
+    Returns:
+        str: the command to run.
+    """
+
     cmd = ['python3', 'components/scanner_component.py', in_path, out_path]
     if disable:
         scanner_parts = [
