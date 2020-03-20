@@ -19,6 +19,8 @@ import shutil
 import subprocess
 import time
 
+from util.consts import ALL_OUTPUTS
+
 WORKING_DIR = '.catch_up_tmp'
 DOWNLOAD_DIR = os.path.join(WORKING_DIR, 'downloads')
 BATCH_VIDEOS_PATH = os.path.join(WORKING_DIR, 'batch_videos.txt')
@@ -81,8 +83,10 @@ def main(date_prefix, local_out_path, gcs_video_path, gcs_caption_path,
            BATCH_CAPTIONS_PATH, PIPELINE_OUTPUT_DIR]
     subprocess.run(cmd, check=True)
 
-    upload_all_pipeline_outputs_to_cloud(PIPELINE_OUTPUT_DIR, downloaded,
-                                         num_processes, GCS_OUTPUT_DIR)
+    if not upload_all_pipeline_outputs_to_cloud(PIPELINE_OUTPUT_DIR, downloaded,
+            num_processes, GCS_OUTPUT_DIR):
+        print('Upload failed. Exiting.')
+        return
 
     # Clean up
     shutil.rmtree(WORKING_DIR)
@@ -205,6 +209,19 @@ def upload_all_pipeline_outputs_to_cloud(out_path, downloaded, num_processes,
 
     orig_path = os.getcwd()
     os.chdir(out_path)
+
+    # Confirm that all pipeline outputs are present
+    missing = False
+    for i in downloaded:
+        if not all(os.path.exists(os.path.join(i, f)) for f in ALL_OUTPUTS):
+            print('Missing outputs for', i)
+            missing = True
+
+    if missing:
+        print('Some outputs are missing. Stopping upload')
+        os.chdir(orig_path)
+        return False
+
     pool = Pool(num_processes)
     num_done = 0
     start_time = time.time()
@@ -216,7 +233,7 @@ def upload_all_pipeline_outputs_to_cloud(out_path, downloaded, num_processes,
                 len(downloaded), time.time() - start_time))
 
     os.chdir(orig_path)
-
+    return True
 
 def upload_pipeline_output_to_cloud(args):
     identifier, gcs_output_path = args

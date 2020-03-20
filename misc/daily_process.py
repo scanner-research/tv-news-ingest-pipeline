@@ -34,6 +34,8 @@ import subprocess
 import time
 from tqdm import tqdm
 
+from util.consts import ALL_OUTPUTS
+
 # Do not place inside of /tmp so that partial outputs remain if the machine
 # goes down
 WORKING_DIR = '.daily_process_tmp'
@@ -86,8 +88,11 @@ def main(year, local_out_path, gcs_video_path, gcs_caption_path, num_processes):
            BATCH_CAPTIONS_PATH, PIPELINE_OUTPUT_DIR]
     subprocess.check_call(cmd)
 
-    upload_all_pipeline_outputs_to_cloud(PIPELINE_OUTPUT_DIR, downloaded,
-                                         num_processes, GCS_OUTPUT_DIR)
+    if not upload_all_pipeline_outputs_to_cloud(PIPELINE_OUTPUT_DIR, downloaded,
+            num_processes, GCS_OUTPUT_DIR):
+        print('Upload failed. Exiting.')
+        return
+
     upload_processed_videos_to_cloud(local_out_path, downloaded, num_processes,
                                      gcs_video_path, gcs_caption_path)
 
@@ -97,7 +102,7 @@ def main(year, local_out_path, gcs_video_path, gcs_caption_path, num_processes):
     cmd = ['sudo', 'docker', '--host', '127.0.0.1:2375', 'container', 'prune',
            '-f']
     subprocess.check_call(cmd)
-    
+
     print('Done.')
 
 
@@ -108,6 +113,19 @@ def upload_all_pipeline_outputs_to_cloud(out_path, downloaded, num_processes,
 
     orig_path = os.getcwd()
     os.chdir(out_path)
+
+    # Confirm that all pipeline outputs are present
+    missing = False
+    for i in downloaded:
+        if not all(os.path.exists(os.path.join(i, f)) for f in ALL_OUTPUTS):
+            print('Missing outputs for', i)
+            missing = True
+
+    if missing:
+        print('Some outputs are missing. Stopping upload')
+        os.chdir(orig_path)
+        return False
+
     pool = Pool(num_processes)
     num_done = 0
     start_time = time.time()
@@ -119,6 +137,7 @@ def upload_all_pipeline_outputs_to_cloud(out_path, downloaded, num_processes,
                 len(downloaded), time.time() - start_time))
 
     os.chdir(orig_path)
+    return True
 
 
 def upload_pipeline_output_to_cloud(args):
