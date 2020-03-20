@@ -81,6 +81,11 @@ def main(in_path, out_path, index_dir, bbox_dir, overwrite, update,
     if update:
         all_videos = load_existing_video_metadata(get_out_path('videos.json'))
 
+        # Check for duplicate videos
+        all_video_names = set(x.name for x in all_videos)
+        for v in new_videos:
+            assert v.name not in all_video_names, v.name + ' already exists!'
+
         # Re-id the new videos
         next_video_id = max(v.id for v in all_videos) + 1
         print('Starting video ids from', next_video_id)
