@@ -34,8 +34,34 @@ import subprocess
 import time
 from tqdm import tqdm
 
+FILE_BBOXES = 'bboxes.json'
+FILE_EMBEDS = 'embeddings.json'
+FILE_BLACK_FRAMES = 'black_frames.json'
+FILE_COMMERCIALS = 'commercials.json'
+FILE_METADATA = 'metadata.json'
+FILE_GENDERS = 'genders.json'
+FILE_IDENTITIES = 'identities.json'
+FILE_IDENTITIES_PROP = 'identities_propogated.json'
+FILE_CAPTIONS = 'captions.srt'
+FILE_CAPTIONS_ORIG = 'captions_orig.srt'
+FILE_ALIGNMENT_STATS = 'alignment_stats.json'
+DIR_CROPS = 'crops'
 
-WORKING_DIR = '/tmp/daily_process'
+ALL_OUTPUTS = [
+    FILE_BBOXES,
+    FILE_EMBEDS,
+    FILE_METADATA,
+    FILE_GENDERS,
+    FILE_IDENTITIES,
+    FILE_IDENTITIES_PROP,
+    FILE_CAPTIONS,
+    FILE_CAPTIONS_ORIG,
+    FILE_ALIGNMENT_STATS,
+    DIR_CROPS
+]
+# Do not place inside of /tmp so that partial outputs remain if the machine
+# goes down
+WORKING_DIR = '.daily_process_tmp'
 DOWNLOAD_DIR = os.path.join(WORKING_DIR, 'downloads')
 BATCH_VIDEOS_PATH = os.path.join(WORKING_DIR, 'batch_videos.txt')
 BATCH_CAPTIONS_PATH = os.path.join(WORKING_DIR, 'batch_captions.txt')
@@ -47,7 +73,7 @@ GCS_OUTPUT_DIR = 'gs://esper/tvnews/ingest-pipeline/outputs'  # pipeline output
 
 PREFIXES = ['MSNBC', 'MSNBCW', 'CNN', 'CNNW', 'FOXNEWS', 'FOXNEWSW']
 
-MAX_VIDEO_DOWNLOADS = 24
+MAX_VIDEO_DOWNLOADS = 72
 
 
 def get_args():
@@ -56,7 +82,7 @@ def get_args():
                         help=('The year for which to download videos. If not '
                               'specified, defaults to year it was yesterday.'))
     parser.add_argument('--local-out-path', default=DOWNLOAD_DIR,
-                        help='Directory to save videos and captions to. ')
+                        help='Directory to save videos and captions to.')
     parser.add_argument('--gcs-video-path', default=GCS_VIDEOS_DIR,
                         help=('The path in Google cloud to which videos should '
                               'be uploaded.'))
@@ -85,24 +111,44 @@ def main(year, local_out_path, gcs_video_path, gcs_caption_path, num_processes):
            BATCH_CAPTIONS_PATH, PIPELINE_OUTPUT_DIR]
     subprocess.check_call(cmd)
 
-    upload_all_pipeline_outputs_to_cloud(PIPELINE_OUTPUT_DIR, downloaded,
-                                         num_processes, GCS_OUTPUT_DIR)
+    if not upload_all_pipeline_outputs_to_cloud(PIPELINE_OUTPUT_DIR, downloaded,
+            num_processes, GCS_OUTPUT_DIR):
+        print('Upload failed. Exiting.')
+        return
+
     upload_processed_videos_to_cloud(local_out_path, downloaded, num_processes,
                                      gcs_video_path, gcs_caption_path)
 
     # Clean up
+    print('Cleaning up files.')
     shutil.rmtree(WORKING_DIR)
     cmd = ['sudo', 'docker', '--host', '127.0.0.1:2375', 'container', 'prune',
-           '-a']
+           '-f']
     subprocess.check_call(cmd)
 
+    print('Done.')
 
-def upload_all_pipeline_outputs_to_cloud(out_path, downloaded, num_processes, gcs_output_path):
+
+def upload_all_pipeline_outputs_to_cloud(out_path, downloaded, num_processes,
+                                         gcs_output_path):
     print('Uploading {} video outputs on {} threads'.format(len(downloaded),
             num_processes))
 
     orig_path = os.getcwd()
     os.chdir(out_path)
+
+    # Confirm that all pipeline outputs are present
+    missing = False
+    for i in downloaded:
+        if not all(os.path.exists(os.path.join(i, f)) for f in ALL_OUTPUTS):
+            print('Missing outputs for', i)
+            missing = True
+
+    if missing:
+        print('Some outputs are missing. Stopping upload')
+        os.chdir(orig_path)
+        return False
+
     pool = Pool(num_processes)
     num_done = 0
     start_time = time.time()
@@ -114,6 +160,7 @@ def upload_all_pipeline_outputs_to_cloud(out_path, downloaded, num_processes, gc
                 len(downloaded), time.time() - start_time))
 
     os.chdir(orig_path)
+    return True
 
 
 def upload_pipeline_output_to_cloud(args):
@@ -121,16 +168,16 @@ def upload_pipeline_output_to_cloud(args):
 
     if os.path.exists(identifier):
         # does not upload crops
-        cmd = ['gsutil', 'cp', '-n', os.path.join(identifier, '*'), gcs_output_path]
-        print('COMMAND', cmd)
+        cmd = ['gsutil', '-m', 'cp', '-n', os.path.join(identifier, '*'),
+               os.path.join(gcs_output_path, identifier)]
         subprocess.check_call(cmd)
 
         cmd = ['sudo', 'rm', '-rf', identifier]
-        print('COMMAND', cmd)
         subprocess.check_call(cmd)
 
 
-def upload_processed_videos_to_cloud(local_out_path, downloaded, num_processes, gcs_video_path, gcs_caption_path):
+def upload_processed_videos_to_cloud(local_out_path, downloaded, num_processes,
+                                     gcs_video_path, gcs_caption_path):
     print('Uploading {} videos on {} threads'.format(len(downloaded), num_processes))
     # Change the current working directory so we download all files into the
     # local_out_path
@@ -143,7 +190,9 @@ def upload_processed_videos_to_cloud(local_out_path, downloaded, num_processes, 
         [(i, gcs_video_path, gcs_caption_path) for i in downloaded]
     ):
         num_done+=1
-        print("Finished uploading {} of {} in {} seconds".format(num_done, len(downloaded), time.time() - start_time))
+        print("Finished uploading {} of {} in {} seconds".format(
+            num_done, len(downloaded), time.time() - start_time
+        ))
 
     os.chdir(orig_path)
 
@@ -185,28 +234,35 @@ def download_unprocessed_videos(year, local_out_path, gcs_video_path,
     pool = Pool(processes = num_processes)
     num_done = 0
     start_time = time.time()
-    for _ in pool.imap_unordered(download_video_and_subs, to_download):
-        num_done+=1
-        print("Finished downloading {} of {} in {} seconds".format(num_done, len(to_download), time.time() - start_time))
+    for identifier in pool.imap_unordered(download_video_and_subs, to_download[:]):
+        if identifier:
+            to_download.remove(identifier)
+        else:
+            num_done+=1
+            print("Finished downloading {} of {} in {} seconds".format(num_done, len(to_download), time.time() - start_time))
 
     os.chdir(orig_path)
     return to_download
 
 
 def create_batch_files(local_out_path, downloaded):
-    # Batch videos file
-    with open(BATCH_VIDEOS_PATH, 'w') as f:
-        lines = [os.path.join(local_out_path, i, i + '.mp4') for i in downloaded]
-        f.write('\n'.join(lines))
-
     # Rename transcripts
-    for identifier in downloaded:
+    for identifier in downloaded[:]:
         id_path = os.path.join(local_out_path, identifier)
         files = os.listdir(id_path)
         captions = list(filter(lambda x: x.endswith('.srt'), files))
         captions = sorted(list(filter(lambda x: '.cc' in x, captions)))
-        os.rename(os.path.join(id_path, captions[0]),
-                  os.path.join(id_path, identifier + '.srt'))
+        if not captions:
+            print('No captions for ', identifier)
+            downloaded.remove(identifier)
+        else:
+            os.rename(os.path.join(id_path, captions[0]),
+                      os.path.join(id_path, identifier + '.srt'))
+
+    # Batch videos file
+    with open(BATCH_VIDEOS_PATH, 'w') as f:
+        lines = [os.path.join(local_out_path, i, i + '.mp4') for i in downloaded]
+        f.write('\n'.join(lines))
 
     # Batch captions file
     with open(BATCH_CAPTIONS_PATH, 'w') as f:
@@ -250,12 +306,15 @@ def list_ia_videos(year):
 
     return identifiers
 
+
 def download_video_and_subs(identifier):
     try:
         subprocess.check_call(['ia', 'download', '--glob=*.mp4', identifier])
         subprocess.check_call(['ia', 'download', '--glob=*.srt', identifier])
     except Exception as e:
         print("Error while downloading from internet archive", e)
+        return identifier
+
 
 
 def upload_video_and_subs_to_cloud(args):
@@ -266,11 +325,11 @@ def upload_video_and_subs_to_cloud(args):
             if fname.endswith('.mp4'):
                 local_path = os.path.join(identifier, fname)
                 cloud_path = os.path.join(gcs_video_path, fname)
-                subprocess.check_call(['gsutil', 'cp', '-n', local_path, cloud_path])
+                subprocess.check_call(['/snap/bin/gsutil', 'cp', '-n', local_path, cloud_path])
             if fname.endswith('.srt') and gcs_caption_path is not None:
                 local_path = os.path.join(identifier, fname)
                 cloud_path = os.path.join(gcs_caption_path, fname)
-                subprocess.check_call(['gsutil', 'cp', '-n', local_path, cloud_path])
+                subprocess.check_call(['/snap/bin/gsutil', 'cp', '-n', local_path, cloud_path])
 
         # FIXME: probably want to keep the video files around locally
         # shutil.rmtree(identifier)
@@ -287,12 +346,12 @@ def lock_script() -> bool:
         True if the lock was acquired, False otherwise.
 
     """
-
-    lockfile = '/tmp/{}.lock'.format(Path(__file__).name)
+    global lockfile
+    lockfile = open('/tmp/{}.lock'.format(Path(__file__).name), 'w')
 
     try:
         # Try to grab an exclusive lock on the file, raise error otherwise
-        fcntl.lockf(open(lockfile, 'w'), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fcntl.lockf(lockfile, fcntl.LOCK_EX | fcntl.LOCK_NB)
 
     except OSError as e:
         if e.errno == errno.EACCES or e.errno == errno.EAGAIN:

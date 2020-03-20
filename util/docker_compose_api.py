@@ -49,9 +49,9 @@ def run_command_in_container(cmd, in_path=None, out_path=None, volumes=None,
     if volumes is None:
         volumes = []
 
-    volumes_to_add = []
+    volumes_to_add = set()
     cwd = Path.cwd().resolve()
-    volumes_to_add.append('-v {}:{}'.format(cwd, cwd))
+    volumes_to_add.add('{}:{}'.format(cwd, cwd))
 
     if in_path is not None:
         volumes.append(str(Path(in_path).parent))
@@ -64,9 +64,13 @@ def run_command_in_container(cmd, in_path=None, out_path=None, volumes=None,
             continue
 
         p = Path(v).resolve()
-        volumes_to_add.append('-v {}:{}'.format(p, p))
+        volumes_to_add.add('{}:{}'.format(p, p))
 
-    shell_cmd += volumes_to_add
+    if volumes_to_add:
+        for v in volumes_to_add:
+            shell_cmd.append('-v')
+            shell_cmd.append(v)
+
     shell_cmd += ['-w', str(cwd)]
 
     shell_cmd += [service, cmd]

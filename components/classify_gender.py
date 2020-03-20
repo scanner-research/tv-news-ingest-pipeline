@@ -26,6 +26,7 @@ Example
 import argparse
 from multiprocessing import Pool
 import os
+from pathlib import Path
 
 import numpy as np
 from tqdm import tqdm
@@ -57,26 +58,47 @@ def get_args():
 
 def main(in_path, out_path, force=False):
     video_names = list(os.listdir(in_path))
-    out_paths = [os.path.join(out_path, name) for name in video_names]
+    out_paths = [Path(out_path)/name for name in video_names]
+    in_path = Path(in_path)
 
     for p in out_paths:
-        os.makedirs(p, exist_ok=True)
+        p.mkdir(parents=True, exist_ok=True)
+
+    # Prune videos that should not be run
+    msg = []
+    for i in range(len(video_names) - 1, -1, -1):
+        embeds_path = in_path/video_names[i]/FILE_EMBEDS
+        if not embeds_path.exists():
+            msg.append("Skipping classifying gender for video '{}': "
+                       "'{}' does not exist.".format(video_names[i], embeds_path))
+            video_names.pop(i)
+            out_paths.pop(i)
+            continue
+
+        genders_outpath = out_paths[i]/FILE_GENDERS
+        if not force and genders_outpath.exists():
+            msg.append("Skipping classifying gender for video '{}': '{}' "
+                       "already exists.".format(video_names[i], genders_outpath))
+            video_names.pop(i)
+            out_paths.pop(i)
+
+    if not video_names:
+        print('All videos have existing gender classifications.')
+        return
+
+    if msg:
+        print(*msg, sep='\n')
 
     with Pool() as workers, tqdm(
         total=len(video_names), desc='Classifying genders', unit='video'
     ) as pbar:
         for video_name, output_dir in zip(video_names, out_paths):
-            embeds_path = os.path.join(in_path, video_name, FILE_EMBEDS)
-            genders_outpath = os.path.join(output_dir, FILE_GENDERS)
-            if force or not os.path.exists(genders_outpath):
-                workers.apply_async(
-                    process_single,
-                    args=(embeds_path, genders_outpath),
-                    callback=lambda x: pbar.update())
-            else:
-                tqdm.write("Skipping classifying gender for video '{}': '{}' "
-                      "already exists!".format(video_name, FILE_GENDERS))
-                pbar.update()
+            embeds_path = in_path/video_name/FILE_EMBEDS
+            genders_outpath = output_dir/FILE_GENDERS
+            workers.apply_async(
+                process_single,
+                args=(str(embeds_path), str(genders_outpath)),
+                callback=lambda x: pbar.update())
 
         workers.close()
         workers.join()

@@ -17,7 +17,7 @@ script takes the video(s) through the following stages:
 
     - identify faces (identify_faces_with_aws.py)
 
-    - propogate identities to unlabeled faces (identity_propogation.py)
+    - propagate identities to unlabeled faces (identity_propagation.py)
 
     - classify gender (classify_gender.py)
 
@@ -38,7 +38,7 @@ Sample output directory after pipeline completion:
     │   ├── embeddings.json
     │   ├── genders.json
     │   ├── identities.json
-    │   ├── identities_propogated.json
+    │   ├── identities_propagated.json
     │   ├── metadata.json
     │   ├── captions.srt
     │   ├── captions_orig.srt
@@ -73,7 +73,7 @@ NAMED_COMPONENTS = [
     'scanner_component',
     'black_frames',
     'identities',
-    'identity_propogation',
+    'identity_propagation',
     'genders',
     'captions_copy',
     'caption_alignment',
@@ -156,18 +156,19 @@ def main(in_path, captions, out_path, host=None, init_run=False, force=False,
 
     if (script and script == 'black_frames') \
             or (not script and 'black_frames' not in disable):
-        run_black_frame_detection(in_path, out_path, video_dirpaths, init_run,
-                force, host=host)
+        from components import detect_black_frames
+        detect_black_frames.main(in_path, out_path, init_run=init_run,
+                                 force=force)
 
     if (script and script == 'identities') \
             or (not script and 'identities' not in disable):
         from components import identify_faces_with_aws
         identify_faces_with_aws.main(out_path, out_path, force=force)
 
-    if (script and script == 'identity_propogation') \
-            or (not script and 'identity_propogation' not in disable):
-        from components import identity_propogation
-        identity_propogation.main(out_path, out_path, force=force)
+    if (script and script == 'identity_propagation') \
+            or (not script and 'identity_propagation' not in disable):
+        from components import identity_propagation
+        identity_propagation.main(out_path, out_path, force=force)
 
     if (script and script == 'genders') \
             or (not script and 'genders' not in disable):
@@ -177,7 +178,8 @@ def main(in_path, captions, out_path, host=None, init_run=False, force=False,
     if captions is not None:
         if (script and script == 'captions_copy') \
                 or (not script and 'captions_copy' not in disable):
-            copy_captions(captions, out_path)
+            from components import copy_captions
+            copy_captions.main(captions, out_path)
 
         if (script and script == 'caption_alignment') \
                 or (not script and 'caption_alignment' not in disable):
@@ -245,46 +247,6 @@ def run_scanner_component(in_path, out_path, video_dirpaths,
                                           force)
     run_command_in_container(cmd, in_path, out_path, video_dirpaths, host)
 
-
-def run_black_frame_detection(in_path, out_path, video_dirpaths,
-                              init_run, force, host):
-    """
-    Runs black_frame_detection.py in a docker container.
-
-    Args:
-        in_path (pathlib.Path): the path to the input file or batch file.
-        out_path (pathlib.Path): the path to the output directory.
-        video_dirpaths (List[pathlib.Path]): the paths to each videos parent 
-            directory.
-        disable (List[str]): a list of named components to disable.
-        init_run (bool): whether this is the first time processing the videos.
-        force (bool): whether existing outputs should be recomputed.
-        host (str): the IP/port that the Docker daemon is listening on.
-
-    """
-
-    cmd = build_black_frame_detection_command(in_path, out_path, init_run,
-                                              force)
-    run_command_in_container(cmd, in_path, out_path, video_dirpaths, host)
-
-
-def build_scanner_component_command(in_path, out_path, disable,
-                                    init_run, force):
-    """
-    Builds a command to run scanner_component.py within a Docker container.
-
-    Args:
-        in_path (pathlib.Path): the path to the input file or batch file.
-        out_path (pathlib.Path): the path to the output directory.
-        disable (List[str]): a list of named components to disable.
-        init_run (bool): whether this is the first time processing the videos.
-        force (bool): whether existing outputs should be recomputed.
-
-    Returns:
-        str: the command to run.
-
-    """
-
     cmd = ['python3', 'components/scanner_component.py', in_path, out_path]
     if disable:
         scanner_parts = [
@@ -303,60 +265,6 @@ def build_scanner_component_command(in_path, out_path, disable,
         cmd.append('-f')
 
     return ' '.join(cmd)
-
-
-def build_black_frame_detection_command(in_path, out_path, init_run, force):
-    """
-    Builds a command to run black_frame_detection.py within a Docker container.
-
-    Args:
-        in_path (pathlib.Path): the path to the input file or batch file.
-        out_path (pathlib.Path): the path to the output directory.
-        init_run (bool): whether this is the first time processing the videos.
-        force (bool): whether existing outputs should be recomputed.
-
-    Returns:
-        str: the command to run.
-
-    """
-
-    cmd = ['python3', 'components/black_frame_detection.py', in_path, out_path]
-    if init_run:
-        cmd.append('-i')
-    if force:
-        cmd.append('-f')
-
-    return ' '.join(cmd)
-
-
-def copy_captions(in_path, out_dir):
-    """
-    Copies the original captions file to the output directory.
-
-    Args:
-        in_path (pathlib.Path): the path to the captions file or batch file.
-        out_dir (pathlib.Path): the path to the output directory.
-
-    """
-
-    if in_path.endswith('.srt'):
-        caption_paths = [in_path]
-        out_paths = [
-            os.path.join(out_dir, get_base_name(in_path), FILE_CAPTIONS_ORIG)
-        ]
-
-    else:
-        with open(in_path, 'r') as f:
-            caption_paths = [l.strip() for l in f if l.strip()]
-        video_names = [get_base_name(p) for p in caption_paths]
-        out_paths = [os.path.join(out_dir, v, FILE_CAPTIONS_ORIG)
-                     for v in video_names]
-
-    for captions, out_path in zip(tqdm(caption_paths,
-        desc='Copying original captions', unit='video'), out_paths
-    ):
-        if not os.path.exists(out_path):
-            shutil.copy(captions, out_path)
 
 
 if __name__ == '__main__':

@@ -14,7 +14,7 @@ import subprocess
 import time
 
 
-GCS_OUTPUT_DIR = 'gs://esper/tvnews/ingest-pipeline/tmp'
+GCS_OUTPUT_DIR = 'gs://esper/tvnews/ingest-pipeline/outputs'
 
 APP_DATA_PATH = '../esper-tv-widget/data/'
 INDEX_PATH = '../esper-tv-widget/index'
@@ -55,7 +55,7 @@ def main(year, local_out_path, gcs_output_path, num_processes):
     subprocess.check_call(cmd)
 
     os.chdir('../esper-tv-widget')
-    subprocess.check_call(['python3', 'derive_data.py', '-t', '1000'])
+    subprocess.check_call(['python3', 'derive_data.py', '-i'])
 
     print('Cleaning up local files.')
     shutil.rmtree(LOCAL_OUTPUT_PATH)
@@ -75,7 +75,9 @@ def download_unprepared_outputs(year, local_out_path, gcs_output_path, num_proce
 
     processed_outputs = list_processed_outputs()
 
-    to_download = available_outputs # - processed_outputs
+    to_download = available_outputs - processed_outputs
+    if not to_download:
+        return []
 
     print('Downloading {} video outputs on {} threads'.format(len(to_download), num_processes))
 
@@ -94,7 +96,7 @@ def download_unprepared_outputs(year, local_out_path, gcs_output_path, num_proce
 
 def download_pipeline_output(args):
     identifier, gcs_output_path, local_out_path = args
-    subprocess.check_call(['gsutil', 'cp', '-r', os.path.join(gcs_output_path, identifier), './'])
+    subprocess.check_call(['gsutil', '-m', 'cp', '-nr', os.path.join(gcs_output_path, identifier), './'])
 
 
 def list_processed_outputs():
@@ -115,7 +117,6 @@ def list_pipeline_outputs(year, gcs_output_path):
             ).decode()
 
             videos |= {parse_identifier(x) for x in output.split('\n') if x.strip()}
-            print(videos)
         except subprocess.CalledProcessError as e:
             pass
 
@@ -134,11 +135,12 @@ def lock_script() -> bool:
 
     """
 
-    lockfile = '/tmp/{}.lock'.format(Path(__file__).name)
+    global lockfile
+    lockfile = open('/tmp/{}.lock'.format(Path(__file__).name), 'w')
 
     try:
         # Try to grab an exclusive lock on the file, raise error otherwise
-        fcntl.lockf(open(lockfile, 'w'), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fcntl.lockf(lockfile, fcntl.LOCK_EX | fcntl.LOCK_NB)
 
     except OSError as e:
         if e.errno == errno.EACCES or e.errno == errno.EAGAIN:

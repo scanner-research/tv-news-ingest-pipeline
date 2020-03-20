@@ -2,6 +2,7 @@ from collections import Counter
 import json
 from multiprocessing import Pool
 import os
+from pathlib import Path
 
 import numpy as np
 from sklearn.metrics.pairwise import euclidean_distances
@@ -18,25 +19,54 @@ L2_THRESH = 0.7
 
 def main(in_path, out_path, force=False):
     video_names = list(os.listdir(in_path))
-    out_paths = [os.path.join(out_path, name) for name in video_names]
+    out_paths = [Path(out_path)/name for name in video_names]
+    in_path = Path(in_path)
 
     for p in out_paths:
-        if not os.path.isdir(p):
-            os.makedirs(p)
+        p.mkdir(parents=True, exist_ok=True)
+
+    # Prune videos that should not be run
+    msg = []
+    for i in range(len(video_names) - 1, -1, -1):
+        identities_path = in_path/video_names[i]/FILE_IDENTITIES
+        embeds_path = in_path/video_names[i]/FILE_EMBEDS
+        prop_outpath = out_paths[i]/FILE_IDENTITIES_PROP
+
+        if not identities_path.exists():
+            msg.append("Skipping identity propagation for video '{}': '{}' "
+                       "does not exist.".format(video_names[i], identities_path))
+        elif not embeds_path.exists():
+            msg.append("Skipping identity propagation for video '{}': '{}' "
+                       "does not exist.".format(video_names[i], embeds_path))
+        elif not force and prop_outpath.exists():
+            msg.append("Skipping identity propagation for video '{}': '{}' "
+                       "already exists.".format(video_names[i], prop_outpath))
+        else:
+            continue
+
+        video_names.pop(i)
+        out_paths.pop(i)
+
+    if not video_names:
+        print('All videos have existing propagated identities.')
+        return
+
+    if msg:
+        print(*msg, sep='\n')
 
     with Pool() as workers, tqdm(
-        total=len(video_names), desc='Propogating identities', unit='video'
+        total=len(video_names), desc='Propagating identities', unit='video'
     ) as pbar:
         for video_name, output_dir in zip(video_names, out_paths):
             identities_path = os.path.join(in_path, video_name,
                                            FILE_IDENTITIES)
             embeds_path = os.path.join(in_path, video_name, FILE_EMBEDS)
-            propogated_ids_outpath = os.path.join(output_dir,
+            propagated_ids_outpath = os.path.join(output_dir,
                                                   FILE_IDENTITIES_PROP)
-            if force or not os.path.exists(propogated_ids_outpath):
+            if force or not os.path.exists(propagated_ids_outpath):
                 workers.apply_async(
                     process_single,
-                    args=(identities_path, embeds_path, propogated_ids_outpath),
+                    args=(identities_path, embeds_path, propagated_ids_outpath),
                     callback=lambda x: pbar.update())
             else:
                 pbar.update()
@@ -45,18 +75,18 @@ def main(in_path, out_path, force=False):
         workers.join()
 
 
-def process_single(identities_path, embeds_path, propogated_ids_outpath):
+def process_single(identities_path, embeds_path, propagated_ids_outpath):
     identities = load_json(identities_path)
     embeddings = load_json(embeds_path)
-    
+
     labeled_face_ids = set(x[0] for x in identities)
     counts = Counter(x[1] for x in identities)
-    names_to_propogate = set(x for x in counts if counts[x] > MIN_LABEL_THRESH)
+    names_to_propagate = set(x for x in counts if counts[x] > MIN_LABEL_THRESH)
     face_id_to_identity = {
-        x[0]: x[1] for x in identities if x[1] in names_to_propogate
+        x[0]: x[1] for x in identities if x[1] in names_to_propagate
     }
-    face_ids_to_propogate = set(face_id_to_identity.keys()) 
-    name_to_face_ids = {name: [] for name in names_to_propogate}
+    face_ids_to_propagate = set(face_id_to_identity.keys())
+    name_to_face_ids = {name: [] for name in names_to_propagate}
     for face_id, name in face_id_to_identity.items():
         name_to_face_ids[name].append(face_id)
 
@@ -64,7 +94,7 @@ def process_single(identities_path, embeds_path, propogated_ids_outpath):
         x[0]: x[1] for x in embeddings if x[0] not in labeled_face_ids
     }
     face_id_to_embed_prop = {
-        x[0]: x[1] for x in embeddings if x[0] in face_ids_to_propogate
+        x[0]: x[1] for x in embeddings if x[0] in face_ids_to_propagate
     }
 
     unlabeled_array = np.array([x for x in face_id_to_embed.values()])
@@ -82,5 +112,5 @@ def process_single(identities_path, embeds_path, propogated_ids_outpath):
             if best_so_far[i][0] is not None:
                 identities.append((face_id, best_so_far[i][0], 50.0))
 
-    save_json(identities, propogated_ids_outpath)
+    save_json(identities, propagated_ids_outpath)
 
