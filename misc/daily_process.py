@@ -59,6 +59,7 @@ ALL_OUTPUTS = [
     FILE_ALIGNMENT_STATS,
     DIR_CROPS
 ]
+
 # Do not place inside of /tmp so that partial outputs remain if the machine
 # goes down
 WORKING_DIR = '.daily_process_tmp'

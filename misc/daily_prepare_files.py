@@ -65,6 +65,8 @@ def main(year, local_out_path, gcs_output_path, num_processes):
     subprocess.check_call(['sudo', 'rm', '-rf', '/tmp/nginx-cache'])
     subprocess.check_call(['sudo', 'service', 'nginx', 'restart'])
 
+    print('Done.')
+
 
 def download_unprepared_outputs(year, local_out_path, gcs_output_path, num_processes):
     os.makedirs(local_out_path, exist_ok=True)
