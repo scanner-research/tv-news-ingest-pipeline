@@ -136,11 +136,11 @@ def lock_script() -> bool:
     """
 
     global lockfile
-    lockfile = '/tmp/{}.lock'.format(Path(__file__).name)
+    lockfile = open('/tmp/{}.lock'.format(Path(__file__).name), 'w')
 
     try:
         # Try to grab an exclusive lock on the file, raise error otherwise
-        fcntl.lockf(open(lockfile, 'w'), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fcntl.lockf(lockfile, fcntl.LOCK_EX | fcntl.LOCK_NB)
 
     except OSError as e:
         if e.errno == errno.EACCES or e.errno == errno.EAGAIN:
