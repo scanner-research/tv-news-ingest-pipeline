@@ -142,7 +142,7 @@ def process_videos(video_paths, out_paths, init_run=False, rerun=False,
     cl = sp.Client(enable_watchdog=False)
 
     if not init_run and not rerun:
-        for i in range(len(video_names) - 1, -1, -1):
+        for i in range(len(video_paths) - 1, -1, -1):
             if (('face_detection' in disable
                 or json_is_valid(os.path.join(out_paths[i], FILE_BBOXES)))
                 and ('face_embeddings' in disable
