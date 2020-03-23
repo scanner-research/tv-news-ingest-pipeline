@@ -259,6 +259,9 @@ def get_video_metadata(video: Video) -> Tuple:
         channel = video.name.split('_', 1)[0]
         show = ''
 
+    if channel[-1] == 'W':
+        channel = channel[:-1]
+
     return (
         video.id,
         video.name,

@@ -141,7 +141,6 @@ def process_videos(video_paths, out_paths, init_run=False, rerun=False,
 
     cl = sp.Client(enable_watchdog=False)
 
-    video_names = [get_base_name(vid) for vid in video_paths]
     if not init_run and not rerun:
         for i in range(len(video_names) - 1, -1, -1):
             if (('face_detection' in disable
@@ -152,9 +151,10 @@ def process_videos(video_paths, out_paths, init_run=False, rerun=False,
                 and ('face_crops' in disable
                     or os.path.isdir(os.path.join(out_paths[i], DIR_CROPS)))
             ):
-                video_names.pop(i)
+                video_paths.pop(i)
                 out_paths.pop(i)
 
+    video_names = [get_base_name(vid) for vid in video_paths]
     if not video_names:
         print('All videos have existing scanner outputs')
         return
