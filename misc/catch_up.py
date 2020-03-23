@@ -264,7 +264,7 @@ def upload_pipeline_output_to_cloud(args):
 
     if os.path.exists(identifier):
         # does not upload crops
-        cmd = ['gsutil', '-m', 'cp', '-n', os.path.join(identifier, '*'),
+        cmd = ['gsutil', 'cp', '-n', os.path.join(identifier, '*'),
                os.path.join(gcs_output_path, identifier)]
         subprocess.check_call(cmd)
 
