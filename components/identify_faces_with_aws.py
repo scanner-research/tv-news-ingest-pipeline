@@ -60,6 +60,10 @@ def get_args():
 
 
 def main(in_path, out_path, force=False):
+    if not AWS_ACCESS_KEY_ID or not AWS_SECRET_ACCESS_KEY:
+        print('AWS credentials do not exist. Skipping face identification.')
+        return
+
     video_names = list(os.listdir(in_path))
     out_paths = [Path(out_path)/name for name in video_names]
     in_path = Path(in_path)
