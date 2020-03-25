@@ -137,21 +137,47 @@ def process_video(crops_path, identities_outpath, max_threads=60):
 
 
 def submit_images_for_labeling(crops_path, img_files):
-    client = load_client()
-    img_filepaths = [os.path.join(crops_path, f) for f in img_files]
-    montage_bytes, meta = create_montage_bytes(img_filepaths)
-    img_ids = [int(get_base_name(x)) for x in img_files]
+    try:
+        client = load_client()
+        img_filepaths = [os.path.join(crops_path, f) for f in img_files]
+        montage_bytes, meta = create_montage_bytes(img_filepaths)
+        if len(montage_bytes) >= 5 * 1024 * 1024:
+            img_filepaths_1 = img_filepaths[:len(img_filepaths)//2]
+            img_filepaths_2 = img_filepaths[len(img_filepaths)//2:]
+            montage_bytes_1, meta_1 = create_montage_bytes(img_filepaths_1)
+            montage_bytes_2, meta_2 = create_montage_bytes(img_filepaths_2)
+            img_ids_1 = [int(get_base_name(x)) for x in img_files[:len(img_files)//2]]
+            img_ids_2 = [int(get_base_name(x)) for x in img_files[len(img_files)//2:]]
+            res_1 = search_aws(montage_bytes_1, client)
+            res_2 = search_aws(montage_bytes_2, client)
 
-    res = search_aws(montage_bytes, client)
-    return process_labeling_results(meta['cols'], meta['block_dim'],
-                                    img_ids, res)
+            labels_1 = process_labeling_results(meta_1['cols'], meta_1['block_dim'],
+                                                img_ids_1, res_1)
+            labels_2 = process_labeling_results(meta_2['cols'], meta_2['block_dim'],
+                                                img_ids_2, res_2)
+            return labels_1 + labels_2
+
+        img_ids = [int(get_base_name(x)) for x in img_files]
+
+        res = search_aws(montage_bytes, client)
+        return process_labeling_results(meta['cols'], meta['block_dim'],
+                                        img_ids, res)
+
+    except AssertionError as e:
+        print(e)
+        raise
+
+    except Exception as e:
+        print(e)
+        raise
+
 
 
 def search_aws(img_data, client):
     # Supported image formats: JPEG, PNG, GIF, BMP.
     # Image dimensions must be at least 50 x 50.
     # Image file size must be less than 5MB.
-    assert len(img_data) < 5e6, 'File too large: {}'.format(len(img_data))
+    assert len(img_data) <= 5 * 1024 * 1024, 'File too large: {}'.format(len(img_data))
     for i in range(10):
         try:
             resp = client.recognize_celebrities(Image={'Bytes': img_data})
