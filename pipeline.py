@@ -53,6 +53,7 @@ Sample output directory after pipeline completion:
 """
 
 import argparse
+import multiprocessing as mp
 import os
 from pathlib import Path
 import shutil
@@ -87,7 +88,7 @@ class PipelineException(Exception):
 
 def get_args():
     """Get command line arguments."""
-    
+
     parser = argparse.ArgumentParser()
     parser.add_argument('in_path', help=('path to mp4 or to a text file '
                                          'containing video filepaths'))
@@ -122,7 +123,7 @@ def main(in_path, captions, out_path, host=None, init_run=False, force=False,
         disable (Optional[List]): a list of components to disable.
                                   Default None.
         script (Optional[str]): a single component to run. Default None.
-    
+
     """
 
     start = time.time()
@@ -154,26 +155,31 @@ def main(in_path, captions, out_path, host=None, init_run=False, force=False,
         run_scanner_component(in_path, out_path, video_dirpaths, disable,
                               init_run, force, host=host)
 
+    def faces_path():
+        if (script and script == 'identities') \
+                or (not script and 'identities' not in disable):
+            from components import identify_faces_with_aws
+            identify_faces_with_aws.main(out_path, out_path, force=force)
+
+        if (script and script == 'identity_propagation') \
+                or (not script and 'identity_propagation' not in disable):
+            from components import identity_propagation
+            identity_propagation.main(out_path, out_path, force=force)
+
+        if (script and script == 'genders') \
+                or (not script and 'genders' not in disable):
+            from components import classify_gender
+            classify_gender.main(out_path, out_path, force=force)
+
+
+    proc = mp.Process(target=faces_path)
+    proc.start()
+
     if (script and script == 'black_frames') \
             or (not script and 'black_frames' not in disable):
         from components import detect_black_frames
         detect_black_frames.main(in_path, out_path, init_run=init_run,
                                  force=force)
-
-    if (script and script == 'identities') \
-            or (not script and 'identities' not in disable):
-        from components import identify_faces_with_aws
-        identify_faces_with_aws.main(out_path, out_path, force=force)
-
-    if (script and script == 'identity_propagation') \
-            or (not script and 'identity_propagation' not in disable):
-        from components import identity_propagation
-        identity_propagation.main(out_path, out_path, force=force)
-
-    if (script and script == 'genders') \
-            or (not script and 'genders' not in disable):
-        from components import classify_gender
-        classify_gender.main(out_path, out_path, force=force)
 
     if captions is not None:
         if (script and script == 'captions_copy') \
@@ -190,6 +196,8 @@ def main(in_path, captions, out_path, host=None, init_run=False, force=False,
             or (not script and 'commercials' not in disable):
         from components import commercial_detection
         commercial_detection.main(out_path, out_path, force=force)
+
+    proc.join()
 
     if not script:
         end = time.time()
@@ -208,7 +216,7 @@ def create_output_dirs(in_path, out_path, single):
         single (bool): whether the in_path is a single file or a batch.
 
     Returns:
-        List[Path], List[Path]: a list of video filepaths and a list of output 
+        List[Path], List[Path]: a list of video filepaths and a list of output
             directory paths.
 
     """
@@ -234,7 +242,7 @@ def run_scanner_component(in_path, out_path, video_dirpaths,
     Args:
         in_path (pathlib.Path): the path to the input file or batch file.
         out_path (pathlib.Path): the path to the output directory.
-        video_dirpaths (List[pathlib.Path]): the paths to each videos parent 
+        video_dirpaths (List[pathlib.Path]): the paths to each videos parent
             directory.
         disable (List[str]): a list of named components to disable.
         init_run (bool): whether this is the first time processing the videos.
