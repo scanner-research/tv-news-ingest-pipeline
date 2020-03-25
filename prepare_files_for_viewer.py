@@ -166,15 +166,15 @@ def main(in_path, out_path, index_dir, bbox_dir, overwrite, update,
             for person_name, person_intervals in person_face_intervals.items():
                 if person_name not in person_ilist_writers:
                     person_ilist_path = os.path.join(
-                        people_ilist_dir, '{}.ilist.bin'.format(person_name.lower()))
-                    append=update
+                        people_ilist_dir,
+                        '{}.ilist.bin'.format(person_name.lower()))
                     if update and not os.path.isfile(person_ilist_path):
-                        append=False
-
+                        # Skip the person, since their file does not exist
+                        continue
                     person_ilist_writers[person_name] = IntervalListMappingWriter(
                         person_ilist_path,
                         1,   # 1 byte of binary payload
-                        append=append
+                        append=update
                     )
                 person_ilist_writers[person_name].write(
                     video.id, person_intervals)
