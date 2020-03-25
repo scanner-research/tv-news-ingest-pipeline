@@ -201,7 +201,9 @@ def main(in_path, captions, out_path, host=None, init_run=False, force=False,
 
     if not script:
         end = time.time()
-        print('Pipeline completed in {:.2f} seconds.'.format(end - start))
+        print('Pipeline completed over {} videos in {:.2f} seconds.'.format(
+            len(video_paths), end - start))
+
 
 
 def create_output_dirs(in_path, out_path, single):
