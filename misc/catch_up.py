@@ -110,7 +110,7 @@ def main(date_prefix, local_out_path, gcs_video_path, gcs_caption_path,
     if not upload_all_pipeline_outputs_to_cloud(PIPELINE_OUTPUT_DIR, downloaded,
             num_processes, GCS_OUTPUT_DIR):
         print('Upload failed. Exiting.')
-        return
+        exit()
 
     # Clean up
     shutil.rmtree(WORKING_DIR)

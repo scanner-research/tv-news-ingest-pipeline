@@ -115,7 +115,7 @@ def main(year, local_out_path, gcs_video_path, gcs_caption_path, num_processes):
     if not upload_all_pipeline_outputs_to_cloud(PIPELINE_OUTPUT_DIR, downloaded,
             num_processes, GCS_OUTPUT_DIR):
         print('Upload failed. Exiting.')
-        return
+        exit()
 
     upload_processed_videos_to_cloud(local_out_path, downloaded, num_processes,
                                      gcs_video_path, gcs_caption_path)
