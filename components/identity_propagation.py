@@ -48,7 +48,7 @@ def main(in_path, out_path, force=False):
         out_paths.pop(i)
 
     if not video_names:
-        print('All videos have existing propagated identities.')
+        print('All videos have existing propagated identities or are missing inputs.')
         return
 
     if msg:
