@@ -198,7 +198,7 @@ def list_processed_videos(date_prefix, gcs_output_path):
                    '{}/{}_{}*'.format(gcs_output_path, prefix, date_prefix)]
             proc = subprocess.run(cmd, stdout=subprocess.PIPE, check=True)
             output = proc.stdout.decode()
-            videos |= {Path(x).stem for x in output.split('\n') if x.strip()}
+            videos |= {Path(x).name for x in output.split('\n') if x.strip()}
         except subprocess.CalledProcessError as e:
             pass  # no matches
 
