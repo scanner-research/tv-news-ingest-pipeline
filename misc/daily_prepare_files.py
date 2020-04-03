@@ -57,6 +57,9 @@ def main(year, local_out_path, gcs_output_path, num_processes):
     os.chdir('../esper-tv-widget')
     subprocess.check_call(['python3', 'derive_data.py', '-i'])
 
+    print('Collecting and emailing daily stats.')
+    collect_and_send_daily_stats(downloaded)
+
     print('Cleaning up local files.')
     shutil.rmtree(LOCAL_OUTPUT_PATH)
 
@@ -66,6 +69,26 @@ def main(year, local_out_path, gcs_output_path, num_processes):
     subprocess.check_call(['sudo', 'service', 'nginx', 'restart'])
 
     print('Done.')
+
+
+def collect_and_send_daily_stats(downloaded):
+    num_videos = len(downloaded)
+    total_sec = 0
+    for identifier in downloaded:
+        path = os.path.join(LOCAL_OUTPUT_PATH, identifier, 'metadata.json')
+        with open(path, 'r') as f:
+            meta = json.load(f)
+
+        total_sec += meta['frames'] / meta['fps']
+
+    date = datetime.datetime.now().strftime('%D')
+    message = f'Daily stats update for {date}:\n' \
+              f'Total number of videos: {num_videos}\n' \
+              f'Total number of hours: {total_sec / 3600:.2f}\n'
+
+    # daily_stats_email is not included
+    from daily_stats_email import send_email
+    send_email(message)
 
 
 def download_unprepared_outputs(year, local_out_path, gcs_output_path, num_processes):
