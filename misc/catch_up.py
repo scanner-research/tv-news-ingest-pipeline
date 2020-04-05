@@ -113,7 +113,10 @@ def main(date_prefix, local_out_path, gcs_video_path, gcs_caption_path,
         exit()
 
     # Clean up
+    print('Cleaning up.')
     shutil.rmtree(WORKING_DIR)
+
+    print('Done.')
 
 
 def download_unprocessed_videos(date_prefix, local_out_path, gcs_video_path,
@@ -228,9 +231,6 @@ def create_batch_files(local_out_path, downloaded):
 
 def upload_all_pipeline_outputs_to_cloud(out_path, downloaded, num_processes,
                                          gcs_output_path):
-    print('Uploading {} video outputs on {} threads'.format(len(downloaded),
-            num_processes))
-
     orig_path = os.getcwd()
     os.chdir(out_path)
 
@@ -239,6 +239,9 @@ def upload_all_pipeline_outputs_to_cloud(out_path, downloaded, num_processes,
         if not all(os.path.exists(os.path.join(i, f)) for f in ALL_OUTPUTS):
             print('Missing outputs for', i)
             downloaded.remove(i)
+
+    print('Uploading {} video outputs on {} threads'.format(len(downloaded),
+            num_processes))
 
     pool = Pool(num_processes)
     num_done = 0

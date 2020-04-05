@@ -31,7 +31,7 @@ class FaceNetEmbed(object):
         self.images_placeholder = tf.compat.v1.get_default_graph().get_tensor_by_name('input:0')
         self.embeddings = tf.compat.v1.get_default_graph().get_tensor_by_name('embeddings:0')
         self.phase_train_placeholder = tf.compat.v1.get_default_graph().get_tensor_by_name('phase_train:0')
-        print('loaded face-embedder model')
+        print('Loaded face-embedder model')
 
     def embed(self, imgs):
         modified = [
