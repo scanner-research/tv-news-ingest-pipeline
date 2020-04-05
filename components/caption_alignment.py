@@ -577,5 +577,10 @@ def main(video_in_path, transcript_in_path, out_path, force=False):
             transcript_path=transcript_paths[i],
             align_dir=str(out_paths[i]))
 
-        stats = aligner.run()
-        save_json(stats, str(out_paths[i]/FILE_ALIGNMENT_STATS))
+        try:
+            stats = aligner.run()
+            save_json(stats, str(out_paths[i]/FILE_ALIGNMENT_STATS))
+        except RuntimeError as e:
+            print('Error in processing {}: {}'.format(video_names[i], e))
+            continue
+
