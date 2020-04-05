@@ -97,9 +97,9 @@ def process_videos(video_paths, out_paths, init_run=False, force=False,
 
     n_threads = os.cpu_count() if os.cpu_count() else 1
 
-    total_sec = int(sum(math.floor(m['frames'] / m['fps']) for m in all_metadata))
+    total_sec = int(sum(math.floor(m['frames'] / m['fps'] / interval) for m in all_metadata))
 
-    pbar = tqdm(total=total_sec, desc='Processing videos', unit='sec')
+    pbar = tqdm(total=total_sec, desc='Processing videos', unit='frame')
     for vid_id in range(len(video_names)):
         path = video_paths[vid_id]
         meta = all_metadata[vid_id]
@@ -148,6 +148,11 @@ def process_videos(video_paths, out_paths, init_run=False, force=False,
                 video_names, out_paths, all_metadata, all_bboxes,
                 all_embeddings, all_crops
         ):
+            target_sec = math.floor(m['frames'] / m['fps'] / interval)
+            if any(len(x) != target_sec for x in [output_faces, output_embeddings, output_crops]):
+                # Error decoding video
+                print('There was an error decoding video \'{}\'. Skipping.'.format(meta['name']))
+                continue
 
             metadata_outpath = out_path/FILE_METADATA
             save_json(meta, str(metadata_outpath))
@@ -209,7 +214,7 @@ def thread_task(in_path, metadata, interval, n_threads, thread_id,
         print('Error opening video file.')
         return
 
-    n_sec = math.floor(metadata['frames'] / metadata['fps'])
+    n_sec = math.floor(metadata['frames'] / metadata['fps'] / interval)
     chunk_size_sec = math.floor(n_sec / n_threads)
     start_sec = chunk_size_sec * thread_id
     if thread_id == n_threads - 1:
@@ -224,7 +229,7 @@ def thread_task(in_path, metadata, interval, n_threads, thread_id,
             video.set(cv2.CAP_PROP_POS_FRAMES, frame_num)
             success, frame = video.read()
             if not success:
-                break
+                return
 
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             frames.append(frame)

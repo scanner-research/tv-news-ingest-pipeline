@@ -103,7 +103,7 @@ def main(date_prefix, local_out_path, gcs_video_path, gcs_caption_path,
 
     create_batch_files(local_out_path, downloaded)
 
-    cmd = ['python3', 'pipeline.py', BATCH_VIDEOS_PATH, '--captions',
+    cmd = ['python3', 'pipeline.py', '-p', BATCH_VIDEOS_PATH, '--captions',
            BATCH_CAPTIONS_PATH, PIPELINE_OUTPUT_DIR]
     subprocess.run(cmd, check=True)
 
@@ -114,9 +114,6 @@ def main(date_prefix, local_out_path, gcs_video_path, gcs_caption_path,
 
     # Clean up
     shutil.rmtree(WORKING_DIR)
-    cmd = ['sudo', 'docker', '--host', '127.0.0.1:2375', 'container', 'prune',
-           '-f']
-    subprocess.check_call(cmd)
 
 
 def download_unprocessed_videos(date_prefix, local_out_path, gcs_video_path,
