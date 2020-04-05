@@ -148,7 +148,7 @@ def process_videos(video_paths, out_paths, init_run=False, force=False,
                 video_names, out_paths, all_metadata, all_bboxes,
                 all_embeddings, all_crops
         ):
-            target_sec = math.floor(m['frames'] / m['fps'] / interval)
+            target_sec = math.floor(meta['frames'] / meta['fps'] / interval)
             if any(len(x) != target_sec for x in [output_faces, output_embeddings, output_crops]):
                 # Error decoding video
                 print('There was an error decoding video \'{}\'. Skipping.'.format(meta['name']))
