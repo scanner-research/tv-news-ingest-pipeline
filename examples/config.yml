@@ -1,10 +1,7 @@
 # This is a sample configuration file
 
 # disable:
-#   - face_detection
-#   - face_embeddings
-#   - face_crops
-#   - scanner_component
+#   - face_component
 #   - black_frames
 #   - identities
 #   - identity_propagation

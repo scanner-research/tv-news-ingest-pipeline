@@ -33,7 +33,7 @@ directory in an easy to use structure and format.
       * [Useful Options](#useful-options)
    * [Configuration](#configuration)
    * [Components](#components)
-      * [Scanner Component](#scanner-component)
+      * [Face Component](#face-component)
       * [Black Frame Detection](#black-frame-detection)
       * [Face Identification](#face-identification)
       * [Face Identity Propogation](#face-identity-propogation)
@@ -46,9 +46,7 @@ directory in an easy to use structure and format.
 ## Getting Started
 
 Note: the TV News pipeline is only "officially" supported on Linux, however
-advanced users can attempt to run it on MacOS (you'll likely need to
-modify how things are installed and change the Docker host used with the
-`--host` option. See [Useful Options](#useful-options) below).
+advanced users can attempt to run it on MacOS.
 
 
 ### Setting Up
@@ -56,9 +54,6 @@ modify how things are installed and change the Docker host used with the
 1. Install Python3 (requires Python 3.5 or up)
 
 2. Install Rust (specifically with `rustup` https://rustup.rs)
-
-3. Install Docker (if installing on Linux, make sure your installation comes
-   with `dockerd`)
 
 4. Clone this repository. The following instructions all take place within
    this repo.
@@ -70,23 +65,12 @@ modify how things are installed and change the Docker host used with the
    installation, you can attempt to follow the chain of installation scripts and
    execute the commands yourself.
 
-6. Setup the docker container for the Scanner dependency by following the
-   instructions at http://scanner.run/guide/quickstart.html#quickstart. You
-   actually just need to run the following two commands:
-   ```
-   wget https://raw.githubusercontent.com/scanner-research/scanner/master/docker/docker-compose.yml
-   docker-compose pull cpu
-   ```
-   The first command downloads a `docker-compose.yml` file, and the second
-   command downloads a ~5GB Docker container for Scanner, so it might take
-   some time to complete.
-
-7. If you want to enable the celebrity face identification using AWS, you
+6. If you want to enable the celebrity face identification using AWS, you
    will need to setup an account with AWS, and add your credentials to a
    `config.yml` file (see [Configuration](#configuration)). Learn more at
    https://docs.aws.amazon.com/rekognition/latest/dg/setting-up.html.
 
-8. If you plan to use the TV News Viewer, please follow the instructions listed
+7. If you plan to use the TV News Viewer, please follow the instructions listed
    in the [TVNEWS_VIEWER_README.md](docs/TVNEWS_VIEWER_README.md).
 
 
@@ -114,10 +98,7 @@ disable face identification. Open up `config.yml` in your favorite editor,
 and uncomment the lines as specified below:
 ```
 disable:
-#   - face_detection
-#   - face_embeddings
-#   - face_crops
-#   - scanner_component
+#   - face_component
 #   - black_frames
   - identities
   - identity_propogation
@@ -178,12 +159,6 @@ For a more visual overview of what the pipeline does check out our
 
 * Videos can be located anywhere on the filesystem
 
-* All tv-news-ingest-pipeline scripts should be contained in same
-  directory as `docker-compose.yml`
-
-* Ensure you have the docker daemon running (you can specify the host if
-  different than default)
-
 * Make sure you have the necessary capabilities to run each component that is
   active (read the [Components](#components) section for more information)
 
@@ -227,10 +202,6 @@ file paths. For example:
 path/to/my_video1.mp4
 different/path/to/my_video2.mp4
 ```
-The videos can be located in any location on the filesystem (but it is
-recommended to keep them together to reduce the number of volumes mounted onto
-the Docker container that Scanner runs within).
-
 Then run `python3 pipeline.py batch_videos.txt output_dir`.
 
 This will produce the same output as with a single video, but with one
@@ -247,9 +218,9 @@ output_dir/
 ### Run an Individual Script
 
 If you want to run any of the pipeline components as individual scripts, use the
-`-s, --script` option. For instance, if you want to run just the scanner component,
+`-s, --script` option. For instance, if you want to run just the face component,
 
-run `python3 pipeline.py batch.txt output_dir --script=scanner_component`,
+run `python3 pipeline.py batch.txt output_dir --script=face_component`,
 
 or if you want to run just the gender classification,
 
@@ -282,13 +253,7 @@ In this case, components can be disabled with the `-d` or `--disable` options.
 
 Currently, the components that can be disabled are:
 
-* `face_detection` (within `scanner_component.py`)
-
-* `face_embeddings` (within `scanner_component.py`)
-
-* `face_crops` (within `scanner_component.py`)
-
-* `scanner_component` (skips the entire scanner component)
+* `face_component` (skips the entire face detection, face embeddings, and face crops component)
 
 * `black_frames` (skips black frame detection)
 
@@ -304,13 +269,10 @@ Currently, the components that can be disabled are:
 
 * `commercials` (skips detecting commercials)
 
-If you wanted to skip extracting face crops and detecting black frames, for
+If you wanted to skip detecting black frames and detecting commercials, for
 instance, you would run
 
-`python3 pipeline.py batch_videos.txt outputdir --disable face_crops black_frames`.
-
-In this case, identifying faces with AWS will still be attempted, but will skip
-after finding that there are no face crops available.
+`python3 pipeline.py batch_videos.txt outputdir --disable black_frames commercials`.
 
 If you run the pipeline once with certain features disabled, and then want to add them back later,
 you can rerun the pipeline with the same output directory and it will attempt to redo only what
@@ -330,19 +292,12 @@ useful options or flags, all of which can be listed with
 * `-f, --force`: Forces recomputation of all outputs, and overwrites existing
   ones.
 
-* `--host`: Specify the IP:port that your docker daemon is running on if
-  different than the default `127.0.0.1:2375`.
-
 
 ## Configuration
 
 Further options can be configured in the `config` file, including things like
 credentials for the AWS identification service. A sample is provided in this
 repo [here](#examples/config.yml). The current configuration options are:
-
-* `num_pipelines`: the number of pipelines to launch Scanner with (this likely
-  should be fewer than the number of cores on your machine, e.g., 1/2 or 1/4
-  of the number of cores).
 
 * `stride`: the interval in seconds between frames in which you look for faces.
 
@@ -356,8 +311,6 @@ repo [here](#examples/config.yml). The current configuration options are:
 
 * `disable`: a list of the named components to disable.
 
-* `host`: the host that the Docker daemon is running on.
-
 
 ## Components
 Here we describe the components in some detail. Not all components will be
@@ -366,8 +319,8 @@ Additionally users are encouraged to write their own components that provide
 the same or similar interface to the existing components (it is not difficult
 to figure out how to add your own if you look in [pipeline.py](pipeline.py)).
 
-### Scanner Component
-The scanner component consists of face detection, computing FaceNet embeddings,
+### Face Component
+The face component consists of face detection, computing FaceNet embeddings,
 and extracting face image crops from frames. These are grouped together to
 reduce the overhead of decoding video frames.
 

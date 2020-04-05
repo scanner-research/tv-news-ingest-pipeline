@@ -1,5 +1,4 @@
 boto3
-docker-compose
 internetarchive
 numpy
 opencv-python-headless

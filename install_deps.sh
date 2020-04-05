@@ -5,7 +5,7 @@ set -e  # exit on error
 git submodule init
 git submodule update
 
-# sudo pip3 install -r requirements.txt
+pip3 install -r requirements.txt
 
 # Install and build detect_black_frames with OpenCV
 sudo apt-get update

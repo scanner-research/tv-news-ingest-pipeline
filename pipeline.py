@@ -8,10 +8,11 @@ This script is the interface to the TV-News video processing pipeline.
 Given a video filepath or textfile containing a list of video filepaths, this
 script takes the video(s) through the following stages:
 
-    - scanner component (scanner_component.py)
-        - detect faces
-        - compute face embeddings
-        - extract face image crops
+    - detect faces (detect_faces_and_compute_embeddings.py)
+
+    - compute face embeddings (detect_faces_and_compute_embeddings.py)
+
+    - extract face image crops (detect_faces_and_compute_embeddings.py)
 
     - detect black frames (black_frame_detection.py)
 
@@ -21,7 +22,7 @@ script takes the video(s) through the following stages:
 
     - classify gender (classify_gender.py)
 
-    - copy original captions
+    - copy original captions (copy_captions.py)
 
     - time align captions (caption_alignment.py)
 
@@ -68,10 +69,7 @@ from util.docker_compose_api import run_command_in_container
 from util.utils import get_base_name
 
 NAMED_COMPONENTS = [
-    'face_detection',   # <
-    'face_embeddings',  # < all within scanner_component.py
-    'face_crops',       # <
-    'scanner_component',
+    'face_component',
     'black_frames',
     'identities',
     'identity_propagation',
@@ -104,11 +102,13 @@ def get_args():
                         help='list of named components to disable')
     parser.add_argument('-s', '--script', choices=NAMED_COMPONENTS[3:],
                         help='run a single component of the pipeline as a script')
+    parser.add_argument('-p', '--parallel', action='store_true',
+                        help='run two branches of components in parallel')
     return parser.parse_args()
 
 
 def main(in_path, captions, out_path, host=None, init_run=False, force=False,
-         disable=None, script=None):
+         disable=None, script=None, parallel=False):
     """
     The entrypoint for the pipeline.
 
@@ -150,10 +150,11 @@ def main(in_path, captions, out_path, host=None, init_run=False, force=False,
     video_dirpaths = [str(Path(p).parent) for p in video_paths]
 
     # Step through each pipeline component
-    if (script and script == 'scanner_component') \
-            or (not script and 'scanner_component' not in disable):
-        run_scanner_component(in_path, out_path, video_dirpaths, disable,
-                              init_run, force, host=host)
+    if (script and script == 'face_component') \
+            or (not script and 'face_component' not in disable):
+        from components import detect_faces_and_compute_embeddings
+        detect_faces_and_compute_embeddings.main(in_path, out_path, init_run,
+                                                 force)
 
     def faces_path():
         if (script and script == 'identities') \
@@ -171,9 +172,11 @@ def main(in_path, captions, out_path, host=None, init_run=False, force=False,
             from components import classify_gender
             classify_gender.main(out_path, out_path, force=force)
 
-
-    proc = mp.Process(target=faces_path)
-    proc.start()
+    if parallel:
+        proc = mp.Process(target=faces_path)
+        proc.start()
+    else:
+        faces_path()
 
     if (script and script == 'black_frames') \
             or (not script and 'black_frames' not in disable):
@@ -197,7 +200,8 @@ def main(in_path, captions, out_path, host=None, init_run=False, force=False,
         from components import commercial_detection
         commercial_detection.main(out_path, out_path, force=force)
 
-    proc.join()
+    if parallel:
+        proc.join()
 
     if not script:
         end = time.time()
@@ -234,62 +238,6 @@ def create_output_dirs(in_path, out_path, single):
         os.makedirs(out, exist_ok=True)
 
     return video_paths, out_paths
-
-
-def run_scanner_component(in_path, out_path, video_dirpaths,
-                          disable, init_run, force, host):
-    """
-    Runs scanner_component.py in a docker container.
-
-    Args:
-        in_path (pathlib.Path): the path to the input file or batch file.
-        out_path (pathlib.Path): the path to the output directory.
-        video_dirpaths (List[pathlib.Path]): the paths to each videos parent
-            directory.
-        disable (List[str]): a list of named components to disable.
-        init_run (bool): whether this is the first time processing the videos.
-        force (bool): whether existing outputs should be recomputed.
-        host (str): the IP/port that the Docker daemon is listening on.
-
-    """
-
-    cmd = build_scanner_component_command(in_path, out_path, disable, init_run,
-                                          force)
-    run_command_in_container(cmd, in_path, out_path, video_dirpaths, host)
-
-
-def build_scanner_component_command(in_path, out_path, disable,
-                                    init_run, force):
-    """
-    Builds a command to run scanner_component.py within a Docker container.
-    Args:
-        in_path (pathlib.Path): the path to the input file or batch file.
-        out_path (pathlib.Path): the path to the output directory.
-        disable (List[str]): a list of named components to disable.
-        init_run (bool): whether this is the first time processing the videos.
-        force (bool): whether existing outputs should be recomputed.
-    Returns:
-        str: the command to run.
-    """
-
-    cmd = ['python3', 'components/scanner_component.py', in_path, out_path]
-    if disable:
-        scanner_parts = [
-            x for x in disable
-            if x in ['face_detection', 'face_embeddings', 'face_crops']
-        ]
-        if scanner_parts:
-            cmd.append('-d')
-            for d in scanner_parts:
-                cmd.append(d)
-
-    if init_run:
-        cmd.append('-i')
-
-    if force:
-        cmd.append('-f')
-
-    return ' '.join(cmd)
 
 
 if __name__ == '__main__':
