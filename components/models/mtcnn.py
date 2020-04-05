@@ -46,18 +46,19 @@ class MTCNN(object):
             num_faces = bounding_boxes.shape[0]
             for i in range(num_faces):
                 confidence = bounding_boxes[i][4]
-                if confidence < .8:
+                if confidence < .1:
                     continue
 
                 img_size = np.asarray(img.shape)[0:2]
-                det = np.squeeze(bounding_boxes[i][0:4])
+                det = np.squeeze(bounding_boxes[i][0:5])
                 vmargin_pix = int((det[2] - det[0]) * vmargin)
                 hmargin_pix = int((det[3] - det[1]) * hmargin)
                 frame_faces.append({
-                    'x1': int(math.floor(np.maximum(det[0] - hmargin_pix / 2, 0))),
-                    'y1': int(math.floor(np.maximum(det[1] - vmargin_pix / 2, 0))),
-                    'x2': int(math.ceil(np.minimum(det[2] + hmargin_pix / 2, img_size[1]))),
-                    'y2': int(math.ceil(np.minimum(det[3] + vmargin_pix / 2, img_size[0])))
+                    'x1': np.maximum(det[0] - hmargin_pix / 2, 0) / img_size[1],
+                    'y1': np.maximum(det[1] - vmargin_pix / 2, 0) / img_size[0],
+                    'x2': np.minimum(det[2] + hmargin_pix / 2, img_size[1]) / img_size[1],
+                    'y2': np.minimum(det[3] + vmargin_pix / 2, img_size[0]) / img_size[0],
+                    'score': det[4]
                 })
 
             batch_faces.append(frame_faces)

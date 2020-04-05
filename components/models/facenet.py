@@ -33,20 +33,27 @@ class FaceNetEmbed(object):
         self.phase_train_placeholder = tf.compat.v1.get_default_graph().get_tensor_by_name('phase_train:0')
         print('loaded face-embedder model')
 
-    def embed(self, img):
-        [fh, fw] = img.shape[:2]
-        if fh == 0 or fw == 0:
-            return np.zeros(128, dtype=np.float32).tobytes()
-        else:
-            img = cv2.resize(img, (self.in_size, self.in_size))
-            img = facenet.prewhiten(img)
-            embs = self.session.run(
-                self.embeddings,
-                feed_dict={
-                    self.images_placeholder: [img],
-                    self.phase_train_placeholder: False
-                })
-            return embs[0]
+    def embed(self, imgs):
+        modified = [
+            facenet.prewhiten(cv2.resize(img, (self.in_size, self.in_size)))
+            for img in imgs
+        ]
+        #for img in imgs:
+        #    [fh, fw] = img.shape[:2]
+
+            #if fh == 0 or fw == 0:
+            #    return np.zeros(128, dtype=np.float32).tobytes()
+            #else:
+        #    img = cv2.resize(img, (self.in_size, self.in_size))
+        #    img = facenet.prewhiten(img)
+        embs = self.session.run(
+            self.embeddings,
+            feed_dict={
+                self.images_placeholder: modified,
+                self.phase_train_placeholder: False
+            }
+        )
+        return embs
 
     def close(self):
         self.session.close()

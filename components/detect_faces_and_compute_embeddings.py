@@ -97,12 +97,14 @@ def process_videos(video_paths, out_paths, init_run=False, force=False,
 
     n_threads = os.cpu_count() if os.cpu_count() else 1
 
-    total_sec = int(sum(m['frames'] // m['fps'] for m in all_metadata))
-    pbar = tqdm(total=total_sec, desc='Computing stuff', unit='sec')
+    total_sec = int(sum(math.floor(m['frames'] / m['fps']) for m in all_metadata))
 
+    pbar = tqdm(total=total_sec, desc='Processing videos', unit='sec')
     for vid_id in range(len(video_names)):
         path = video_paths[vid_id]
         meta = all_metadata[vid_id]
+
+        pbar.set_description('Processing videos: {}'.format(meta['name']))
         thread_bboxes = [[] for _ in range(n_threads)]
         thread_crops = [[] for _ in range(n_threads)]
         thread_embeddings = [[] for _ in range(n_threads)]
@@ -196,6 +198,7 @@ def get_video_metadata(video_name: str, video_path: Path):
     }
 
 
+BATCH_SIZE = 16
 def thread_task(in_path, metadata, interval, n_threads, thread_id,
                 thread_bboxes, thread_crops, thread_embeddings, face_embedder,
                 face_detector, pbar):
@@ -213,43 +216,47 @@ def thread_task(in_path, metadata, interval, n_threads, thread_id,
         chunk_size_sec += n_sec % n_threads
     end_sec = start_sec + chunk_size_sec
 
-    for sec in range(start_sec, end_sec):
-        frame_num = math.ceil(sec * metadata['fps'] * interval)
-        video.set(cv2.CAP_PROP_POS_FRAMES, frame_num)
-        success, frame = video.read()
-        if not success:
-            break
+    for sec in range(start_sec, end_sec, BATCH_SIZE):
+        frames = []
 
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        for i in range(sec, min(sec + BATCH_SIZE, end_sec)):
+            frame_num = math.ceil(i * metadata['fps'] * interval)
+            video.set(cv2.CAP_PROP_POS_FRAMES, frame_num)
+            success, frame = video.read()
+            if not success:
+                break
 
-        detected_faces = face_detector.face_detect([frame])[0]
-        dilated_bboxes = dilate_bboxes(detected_faces)
-        crops = [crop_bbox(frame, bb) for bb in dilated_bboxes]
-        embeddings = [face_embedder.embed(c) for c in crops]
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            frames.append(frame)
 
-        thread_bboxes[thread_id].append(detected_faces)
-        thread_crops[thread_id].append(crops)
-        thread_embeddings[thread_id].append(embeddings)
-        pbar.update(1)
+        detected_faces = face_detector.face_detect(frames)
+        dilated_bboxes = [dilate_bboxes(x) if x else [] for x in detected_faces]
+        crops = [[crop_bbox(frame, bb) for bb in x] if x else [] for x in dilated_bboxes]
+        embeddings = [face_embedder.embed(c) if c else [] for c in crops]
+
+        thread_bboxes[thread_id].extend(detected_faces)
+        thread_crops[thread_id].extend(crops)
+        thread_embeddings[thread_id].extend(embeddings)
+        pbar.update(len(frames))
 
 
 DILATE_AMOUNT = 1.05
 def dilate_bboxes(detected_faces):
     return [{
-        'x1': math.floor(bbox['x1'] * (2 - DILATE_AMOUNT)),
-        'x2': math.ceil(bbox['x2'] * DILATE_AMOUNT),
-        'y1': math.floor(bbox['y1'] * (2 - DILATE_AMOUNT)),
-        'y2': math.ceil(bbox['y2'] * DILATE_AMOUNT)
+        'x1': bbox['x1'] * (2 - DILATE_AMOUNT),
+        'x2': bbox['x2'] * DILATE_AMOUNT,
+        'y1': bbox['y1'] * (2 - DILATE_AMOUNT),
+        'y2': bbox['y2'] * DILATE_AMOUNT
     } for bbox in detected_faces]
 
 
 def crop_bbox(img, bbox, expand=0.1):
+    y1 = max(bbox['y1'] - expand, 0)
+    y2 = min(bbox['y2'] + expand, 1)
+    x1 = max(bbox['x1'] - expand, 0)
+    x2 = min(bbox['x2'] + expand, 1)
     h, w = img.shape[:2]
-    y1 = max(bbox['y1'] - expand * h, 0)
-    y2 = min(bbox['y2'] + expand * h, h)
-    x1 = max(bbox['x1'] - expand * w, 0)
-    x2 = min(bbox['x2'] + expand * w, w)
-    cropped = img[int(y1):int(y2), int(x1):int(x2), :]
+    cropped = img[int(y1 * h):int(y2 * h), int(x1 * w):int(x2 * w), :]
 
     # Crop largest square
     if cropped.shape[0] > cropped.shape[1]:
@@ -268,15 +275,13 @@ def crop_bbox(img, bbox, expand=0.1):
 
 def handle_face_bboxes_results(detected_faces, stride, outpath: str):
     result = []  # [(<face_id>, {'frame_num': <n>, 'bbox': <bbox_dict>}), ...]
-    frame_num = 0
     for i, faces in enumerate(detected_faces):
         faces_in_frame = [
-            (face_id, {'frame_num': frame_num, 'bbox': face})
+            (face_id, {'frame_num': math.ceil(i * stride), 'bbox': face})
             for face_id, face in enumerate(faces, len(result))
         ]
 
         result += faces_in_frame
-        frame_num += math.ceil(i * stride)
 
     save_json(result, outpath)
 
@@ -285,7 +290,7 @@ def handle_face_embeddings_results(face_embeddings, outpath):
     result = []  # [(<face_id>, <embedding>), ...]
     for embeddings in face_embeddings:
         faces_in_frame = [
-            (face_id, [float(x) for x in list(embed)])
+            (face_id, [float(x) for x in embed])
             for face_id, embed in enumerate(embeddings, len(result))
         ]
 

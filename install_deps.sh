@@ -7,6 +7,9 @@ git submodule update
 
 pip3 install -r requirements.txt
 
+# Unpack models
+(cd components && cat data.tar.bz2.* | tar -xvjf -)
+
 # Install and build detect_black_frames with OpenCV
 sudo apt-get update
 sudo apt-get install -y unzip

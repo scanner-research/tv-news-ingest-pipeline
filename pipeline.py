@@ -100,7 +100,7 @@ def get_args():
                         help='force rerun for all videos')
     parser.add_argument('-d', '--disable', nargs='+', choices=NAMED_COMPONENTS,
                         help='list of named components to disable')
-    parser.add_argument('-s', '--script', choices=NAMED_COMPONENTS[3:],
+    parser.add_argument('-s', '--script', choices=NAMED_COMPONENTS,
                         help='run a single component of the pipeline as a script')
     parser.add_argument('-p', '--parallel', action='store_true',
                         help='run two branches of components in parallel')
