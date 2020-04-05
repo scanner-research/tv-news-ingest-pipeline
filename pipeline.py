@@ -147,7 +147,6 @@ def main(in_path, captions, out_path, host=None, init_run=False, force=False,
 
     print('Creating output directories at "{}"...'.format(out_path))
     video_paths, output_dirs = create_output_dirs(in_path, out_path, single)
-    video_dirpaths = [str(Path(p).parent) for p in video_paths]
 
     # Step through each pipeline component
     if (script and script == 'face_component') \

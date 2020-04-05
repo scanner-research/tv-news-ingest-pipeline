@@ -123,9 +123,6 @@ def main(year, local_out_path, gcs_video_path, gcs_caption_path, num_processes):
     # Clean up
     print('Cleaning up files.')
     shutil.rmtree(WORKING_DIR)
-    cmd = ['sudo', 'docker', '--host', '127.0.0.1:2375', 'container', 'prune',
-           '-f']
-    subprocess.check_call(cmd)
 
     print('Done.')
 
@@ -139,16 +136,10 @@ def upload_all_pipeline_outputs_to_cloud(out_path, downloaded, num_processes,
     os.chdir(out_path)
 
     # Confirm that all pipeline outputs are present
-    missing = False
-    for i in downloaded:
+    for i in downloaded[:]:
         if not all(os.path.exists(os.path.join(i, f)) for f in ALL_OUTPUTS):
             print('Missing outputs for', i)
-            missing = True
-
-    if missing:
-        print('Some outputs are missing. Stopping upload')
-        os.chdir(orig_path)
-        return False
+            downloaded.remove(i)
 
     sync_with_server()
 

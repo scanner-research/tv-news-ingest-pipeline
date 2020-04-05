@@ -235,16 +235,10 @@ def upload_all_pipeline_outputs_to_cloud(out_path, downloaded, num_processes,
     os.chdir(out_path)
 
     # Confirm that all pipeline outputs are present
-    missing = False
-    for i in downloaded:
+    for i in downloaded[:]:
         if not all(os.path.exists(os.path.join(i, f)) for f in ALL_OUTPUTS):
             print('Missing outputs for', i)
-            missing = True
-
-    if missing:
-        print('Some outputs are missing. Stopping upload')
-        os.chdir(orig_path)
-        return False
+            downloaded.remove(i)
 
     pool = Pool(num_processes)
     num_done = 0
