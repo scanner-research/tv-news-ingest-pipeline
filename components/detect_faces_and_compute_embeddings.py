@@ -127,6 +127,8 @@ def process_videos(video_paths, out_paths, init_run=False, force=False,
             all_embeddings[vid_id] += thread_embeddings[i]
 
     pbar.close()
+    face_embedder.close()
+    face_detector.close()
 
     # Async callback function
     def callback_fn(data=None, path=None, save_fn=None, pbar=None):
@@ -229,6 +231,7 @@ def thread_task(in_path, metadata, interval, n_threads, thread_id,
             video.set(cv2.CAP_PROP_POS_FRAMES, frame_num)
             success, frame = video.read()
             if not success:
+                video.release()
                 return
 
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -243,6 +246,8 @@ def thread_task(in_path, metadata, interval, n_threads, thread_id,
         thread_crops[thread_id].extend(crops)
         thread_embeddings[thread_id].extend(embeddings)
         pbar.update(len(frames))
+
+    video.release()
 
 
 DILATE_AMOUNT = 1.05
