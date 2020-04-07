@@ -91,10 +91,6 @@ def process_videos(video_paths, out_paths, init_run=False, force=False,
         for i in trange(len(video_names), desc='Collecting metadata', unit='video')
     ]
 
-    all_bboxes = [[] for _ in range(len(video_names))]
-    all_crops = [[] for _ in range(len(video_names))]
-    all_embeddings = [[] for _ in range(len(video_names))]
-
     n_threads = os.cpu_count() if os.cpu_count() else 1
 
     total_sec = int(sum(math.floor(m['frames'] / m['fps'] / interval) for m in all_metadata))
@@ -121,71 +117,40 @@ def process_videos(video_paths, out_paths, init_run=False, force=False,
         for t in threads:
             t.join()
 
+        all_bboxes = []
+        all_crops = []
+        all_embeddings = []
         for i in range(n_threads):
-            all_bboxes[vid_id] += thread_bboxes[i]
-            all_crops[vid_id] += thread_crops[i]
-            all_embeddings[vid_id] += thread_embeddings[i]
+            all_bboxes += thread_bboxes[i]
+            all_crops += thread_crops[i]
+            all_embeddings += thread_embeddings[i]
+
+        target_sec = math.floor(meta['frames'] / meta['fps'] / interval)
+        if any(len(x) != target_sec for x in [all_bboxes, all_crops, all_embeddings]):
+            # Error decoding video
+            print('\nThere was an error decoding video \'{}\'. Skipping.'.format(meta['name']))
+            continue
+
+        pbar.set_description('Saving metadata for {}'.format(meta['name']))
+        out_path = out_paths[vid_id]
+        metadata_outpath = out_path/FILE_METADATA
+        save_json(meta, str(metadata_outpath))
+
+        pbar.set_description('Saving bboxes for {}'.format(meta['name']))
+        bbox_outpath = out_path/FILE_BBOXES
+        handle_face_bboxes_results(all_bboxes, meta['fps'] * interval, str(bbox_outpath))
+
+        pbar.set_description('Saving embeddings for {}'.format(meta['name']))
+        embed_outpath = out_path/FILE_EMBEDS
+        handle_face_embeddings_results(all_embeddings, str(embed_outpath))
+
+        pbar.set_description('Saving crops for {}'.format(meta['name']))
+        crops_outpath = out_path/DIR_CROPS
+        handle_face_crops_results(all_crops, str(crops_outpath))
 
     pbar.close()
     face_embedder.close()
     face_detector.close()
-
-    # Async callback function
-    def callback_fn(data=None, path=None, save_fn=None, pbar=None):
-        if save_fn:
-            save_fn(data, path)
-        if pbar:
-            pbar.update(1)
-
-    tmp_dir = '/tmp/face_crops'
-    if not os.path.exists(tmp_dir):
-        os.makedirs(tmp_dir)
-
-    with mp.Pool() as workers, tqdm(
-        total=len(video_names) * (len(SCANNER_COMPONENT_OUTPUTS) - len(disable)),
-        desc='Collecting output', unit='output'
-    ) as pbar:
-        for (video_name, out_path, meta, output_faces, output_embeddings,
-             output_crops) in zip(
-                video_names, out_paths, all_metadata, all_bboxes,
-                all_embeddings, all_crops
-        ):
-            target_sec = math.floor(meta['frames'] / meta['fps'] / interval)
-            if any(len(x) != target_sec for x in [output_faces, output_embeddings, output_crops]):
-                # Error decoding video
-                print('There was an error decoding video \'{}\'. Skipping.'.format(meta['name']))
-                continue
-
-            metadata_outpath = out_path/FILE_METADATA
-            save_json(meta, str(metadata_outpath))
-            pbar.update(1)
-
-            bbox_outpath = out_path/FILE_BBOXES
-            workers.apply_async(
-                handle_face_bboxes_results,
-                args=(output_faces, meta['fps'] * interval, str(bbox_outpath)),
-                callback=partial(callback_fn, pbar=pbar)
-            )
-
-            embed_outpath = out_path/FILE_EMBEDS
-            workers.apply_async(
-                handle_face_embeddings_results,
-                args=(output_embeddings, str(embed_outpath)),
-                callback=partial(callback_fn, pbar=pbar)
-            )
-
-            tmp_path = os.path.join(tmp_dir, '{}.pkl'.format(video_name))
-            with open(tmp_path, 'wb') as f:
-                pickle.dump(output_crops, f)
-            crops_outpath = out_path/DIR_CROPS
-            workers.apply_async(
-                handle_face_crops_results,
-                args=(tmp_path, str(crops_outpath)),
-                callback=partial(callback_fn, pbar=pbar)
-            )
-
-        workers.close()
-        workers.join()
 
 
 def load_models(models_dir):
@@ -309,17 +274,13 @@ def handle_face_embeddings_results(face_embeddings, outpath):
     save_json(result, outpath)
 
 
-def handle_face_crops_results(face_crops_path, out_dirpath):
+def handle_face_crops_results(face_crops, out_dirpath):
     # Results are too large to transmit
-    results = get_face_crops_results(face_crops_path)
+    results = get_face_crops_results(face_crops)
     save_face_crops(results, out_dirpath)
 
 
-def get_face_crops_results(face_crops_path):
-    with open(face_crops_path, 'rb') as f:
-        face_crops = pickle.load(f)
-    os.remove(face_crops_path)
-
+def get_face_crops_results(face_crops):
     result = []  # [(<face_id>, <crop>)]
     for crops in face_crops:
         faces_in_frame = [

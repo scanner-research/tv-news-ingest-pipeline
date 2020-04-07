@@ -1,6 +1,7 @@
 import codecs
 import json
 import math
+import multiprocessing as mp
 from multiprocessing import Pool
 import os
 from pathlib import Path
@@ -77,6 +78,7 @@ class TranscriptAligner():
                 self.video_length = int(self.video_frames // self.fps)
                 self.num_seg = int(self.video_length // self.seg_length)
                 self.num_window = int(self.video_length // self.win_size)
+                cap.release()
             else:
                 raise Exception("File type '{}' not supported.".format(ext))
 
@@ -568,19 +570,28 @@ def main(video_in_path, transcript_in_path, out_path, force=False):
         print(*msg, sep='\n')
 
     num_threads = os.cpu_count() if os.cpu_count() else 1
-    for i in range(len(video_names)):
-        print("Aligning captions for video '{}'".format(video_names[i]))
 
+    def align_video(num_threads, video_name, video_path, transcript_path, out_path):
         aligner = TranscriptAligner(win_size=300, seg_length=60,
-            max_misalign=10, num_thread=num_threads, estimate=True, missing_thresh=0.2,
-            media_path=video_paths[i],
-            transcript_path=transcript_paths[i],
-            align_dir=str(out_paths[i]))
+            max_misalign=10, num_thread=num_threads, estimate=True,
+            missing_thresh=0.2, media_path=video_path,
+            transcript_path=transcript_path, align_dir=out_path)
 
         try:
             stats = aligner.run()
-            save_json(stats, str(out_paths[i]/FILE_ALIGNMENT_STATS))
+            save_json(stats, os.path.join(out_path, FILE_ALIGNMENT_STATS))
         except RuntimeError as e:
-            print('Error in processing {}: {}'.format(video_names[i], e))
-            continue
+            print('Error in processing {}: {}'.format(video_name, e))
+
+
+    for i in range(len(video_names)):
+        print("Aligning captions for video '{}'".format(video_names[i]))
+        proc = mp.Process(
+            target=align_video,
+            args=(num_threads, video_names[i], video_paths[i],
+                  transcript_paths[i], str(out_paths[i]))
+        )
+
+        proc.start()
+        proc.join()
 
