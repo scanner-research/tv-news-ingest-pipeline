@@ -56,7 +56,7 @@ def get_args():
         help='Update existing files in place.')
 
     parser.add_argument('--face-sample-rate', type=int, default=1,
-                        help='Number of samples per second')
+                        help='Number of seconds per sample')
     return parser.parse_args()
 
 
@@ -317,7 +317,7 @@ def get_face_intervals(video_dir: str, video: Video, face_sample_rate: int):
     for face_id, face_meta in load_file(FILE_BBOXES):
         start_time = face_meta['frame_num'] / video.fps
         start_ms = int(start_time * 1000)
-        end_ms = start_ms + int(1000 / face_sample_rate)
+        end_ms = start_ms + int(1000 * face_sample_rate)
         face_height = face_meta['bbox']['y2'] - face_meta['bbox']['y1']
         face_interval = (start_ms, end_ms, encode_face_interval_payload(
             gender_dict[genders.get(face_id, 'O').lower()],
@@ -363,7 +363,7 @@ def format_bbox_file_data(video_dir: str, video: Video, face_sample_rate: int):
     for face_id, face_meta in load_file(FILE_BBOXES):
         start_time = face_meta['frame_num'] / video.fps
         face_bbox = {
-            't': [start_time, start_time + 1 / face_sample_rate],
+            't': [start_time, start_time + 1 * face_sample_rate],
             'b': [
                 round(face_meta['bbox']['x1'], 2),
                 round(face_meta['bbox']['y1'], 2),
