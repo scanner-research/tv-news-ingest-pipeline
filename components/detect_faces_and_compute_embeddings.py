@@ -204,12 +204,19 @@ def thread_task(in_path, metadata, interval, n_threads, thread_id,
 
         detected_faces = face_detector.face_detect(frames)
         dilated_bboxes = [dilate_bboxes(x) if x else [] for x in detected_faces]
-        crops = [[crop_bbox(f, bb) for bb in x] if x else [] for f, x in zip(frames, dilated_bboxes)]
+
+        # Cropped images to compute embeddings on
+        crops = [[crop_bbox(f, bb) for bb in x] if x else []
+                 for f, x in zip(frames, dilated_bboxes)]
         embeddings = [face_embedder.embed(c) if c else [] for c in crops]
 
+        # Cropped images being saved
+        crops = [[crop_bbox(f, bb, expand=0.1, square=True) for bb in x] if x else []
+                 for f, x in zip(frames, dilated_bboxes)]
+
         thread_bboxes[thread_id].extend(detected_faces)
-        thread_crops[thread_id].extend(crops)
         thread_embeddings[thread_id].extend(embeddings)
+        thread_crops[thread_id].extend(crops)
         pbar.update(len(frames))
 
     video.release()
@@ -225,13 +232,16 @@ def dilate_bboxes(detected_faces):
     } for bbox in detected_faces]
 
 
-def crop_bbox(img, bbox, expand=0.1):
+def crop_bbox(img, bbox, expand=0.0, square=False):
     y1 = max(bbox['y1'] - expand, 0)
     y2 = min(bbox['y2'] + expand, 1)
     x1 = max(bbox['x1'] - expand, 0)
     x2 = min(bbox['x2'] + expand, 1)
     h, w = img.shape[:2]
     cropped = img[int(y1 * h):int(y2 * h), int(x1 * w):int(x2 * w), :]
+
+    if not square:
+        return cropped
 
     # Crop largest square
     if cropped.shape[0] > cropped.shape[1]:
