@@ -91,7 +91,7 @@ def process_videos(video_paths, out_paths, init_run=False, force=False,
         for i in trange(len(video_names), desc='Collecting metadata', unit='video')
     ]
 
-    n_threads = 1 # os.cpu_count() if os.cpu_count() else 1
+    n_threads = os.cpu_count() if os.cpu_count() else 1
 
     total_sec = int(sum(math.floor(m['frames'] / m['fps'] / interval) for m in all_metadata))
 
