@@ -52,6 +52,8 @@ def main(year, local_out_path, gcs_output_path, num_processes):
         return
 
     cmd = ['python3', 'prepare_files_for_viewer.py', '-u', LOCAL_OUTPUT_PATH, APP_DATA_PATH, '--index-dir', INDEX_PATH]
+    if str(year).startswith('2019'):
+        cmd += ['--face-sample-rate', '3']
     subprocess.check_call(cmd)
 
     os.chdir('../esper-tv-widget')
@@ -74,17 +76,44 @@ def main(year, local_out_path, gcs_output_path, num_processes):
 def collect_and_send_daily_stats(downloaded):
     num_videos = len(downloaded)
     total_sec = 0
+    per_channel = {
+        channel: {'num_videos': 0, 'total_sec': 0, 'commercial_sec': 0}
+        for channel in ['MSNBC', 'FOX', 'CNN']
+    }
+
     for identifier in downloaded:
         path = os.path.join(LOCAL_OUTPUT_PATH, identifier, 'metadata.json')
         with open(path, 'r') as f:
             meta = json.load(f)
 
         total_sec += meta['frames'] / meta['fps']
-
+        for channel in per_channel:
+            if meta['name'].startswith(channel):
+                per_channel[channel]['num_videos'] += 1
+                per_channel[channel]['total_sec'] += meta['frames'] / meta['fps']
+                
+                #path = os.path.join(LOCAL_OUTPUT_PATH, identifier, 'bboxes.json')
+                #per_channel[channel]['faces'] += len(json.load(open(path, 'r')))
+                
+                path = os.path.join(LOCAL_OUTPUT_PATH, identifier, 'commercials.json')
+                with open(path, 'r') as f:
+                    commercials = json.load(f)
+                for interval in commercials:
+                    per_channel[channel]['commercial_sec'] += (interval[1] - interval[0]) / meta['fps']
+                
+                break
+                
     date = datetime.datetime.now().strftime('%D')
     message = f'Daily stats update for {date}:\n' \
+              f'================================\n' \
               f'Total number of videos: {num_videos}\n' \
               f'Total number of hours: {total_sec / 3600:.2f}\n'
+
+    for channel, stats in per_channel.items():
+        message += f'\n{channel}:\n' \
+                   f'Total number of videos: {stats["num_videos"]}\n' \
+                   f'Total number of hours: {stats["total_sec"] / 3600:.2f}\n' \
+                   f'Total commercial hours: {stats["commercial_sec"] / 3600:.2f}\n'
 
     # daily_stats_email is not included
     from daily_stats_email import send_email
