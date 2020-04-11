@@ -74,7 +74,7 @@ GCS_OUTPUT_DIR = 'gs://esper/tvnews/ingest-pipeline/outputs'  # pipeline output
 
 PREFIXES = ['MSNBC', 'MSNBCW', 'CNN', 'CNNW', 'FOXNEWS', 'FOXNEWSW']
 
-MAX_VIDEO_DOWNLOADS = 72
+MAX_VIDEO_DOWNLOADS = 100
 
 
 def get_args():
@@ -108,7 +108,7 @@ def main(year, local_out_path, gcs_video_path, gcs_caption_path, num_processes):
 
     create_batch_files(local_out_path, downloaded)
 
-    cmd = ['python3', 'pipeline.py', BATCH_VIDEOS_PATH, '--captions',
+    cmd = ['python3', 'pipeline.py', '-p', BATCH_VIDEOS_PATH, '--captions',
            BATCH_CAPTIONS_PATH, PIPELINE_OUTPUT_DIR]
     subprocess.check_call(cmd)
 
@@ -208,10 +208,11 @@ def download_unprocessed_videos(year, local_out_path, gcs_video_path,
 
     print('Listing available videos...')
     available = list_ia_videos(year)
+    available_by_date = sorted(available, key=lambda x: x.split('_')[1], reverse=True)
 
     # Exclude videos we have already downloaded and videos which have no available mp4
     to_download = []
-    for video in available:
+    for video in available_by_date:
         if video in downloaded:
             continue
         # This prints results directly to the terminal

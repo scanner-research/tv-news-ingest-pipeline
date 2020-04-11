@@ -91,7 +91,7 @@ def process_videos(video_paths, out_paths, init_run=False, force=False,
         for i in trange(len(video_names), desc='Collecting metadata', unit='video')
     ]
 
-    n_threads = os.cpu_count() if os.cpu_count() else 1
+    n_threads = 1 # os.cpu_count() if os.cpu_count() else 1
 
     total_sec = int(sum(math.floor(m['frames'] / m['fps'] / interval) for m in all_metadata))
 
@@ -204,7 +204,7 @@ def thread_task(in_path, metadata, interval, n_threads, thread_id,
 
         detected_faces = face_detector.face_detect(frames)
         dilated_bboxes = [dilate_bboxes(x) if x else [] for x in detected_faces]
-        crops = [[crop_bbox(frame, bb) for bb in x] if x else [] for x in dilated_bboxes]
+        crops = [[crop_bbox(f, bb) for bb in x] if x else [] for f, x in zip(frames, dilated_bboxes)]
         embeddings = [face_embedder.embed(c) if c else [] for c in crops]
 
         thread_bboxes[thread_id].extend(detected_faces)
