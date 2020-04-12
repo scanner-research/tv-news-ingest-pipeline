@@ -93,7 +93,6 @@ def get_args():
     parser.add_argument('--captions', help=('path to srt or to a text file '
                                             'containing srt filepaths'))
     parser.add_argument('out_path', help='path to output directory')
-    parser.add_argument('--host', help='docker host IP:port')
     parser.add_argument('-i', '--init-run', action='store_true',
                         help='running on videos for the first time')
     parser.add_argument('-f', '--force', action='store_true',
@@ -107,7 +106,7 @@ def get_args():
     return parser.parse_args()
 
 
-def main(in_path, captions, out_path, host=None, init_run=False, force=False,
+def main(in_path, captions, out_path, init_run=False, force=False,
          disable=None, script=None, parallel=False):
     """
     The entrypoint for the pipeline.
@@ -116,7 +115,6 @@ def main(in_path, captions, out_path, host=None, init_run=False, force=False,
         in_path (str): the path to the video file or batch file.
         captions (str): the path to the captions file or batch captions file.
         out_path (str): the path to the output directory.
-        host (Optional[str]): the host to connect to Docker on. Default None.
         init_run (bool): whether this is the first time processing the videos.
                          Default False.
         force (bool): whether to overwrite existing outputs. Default False.
@@ -131,9 +129,6 @@ def main(in_path, captions, out_path, host=None, init_run=False, force=False,
     # Configuration settings
     if disable is None:
         disable = config.DISABLE if config.DISABLE else []
-
-    if host is None:
-        host = config.HOST
 
     # Validate file formats
     single = not in_path.endswith('.txt') and not os.path.isdir(in_path)
@@ -152,8 +147,7 @@ def main(in_path, captions, out_path, host=None, init_run=False, force=False,
     if (script and script == 'face_component') \
             or (not script and 'face_component' not in disable):
         from components import detect_faces_and_compute_embeddings
-        detect_faces_and_compute_embeddings.main(in_path, out_path, init_run,
-                                                 force)
+        detect_faces_and_compute_embeddings.main(in_path, out_path, init_run, force)
 
     def faces_path():
         if (script and script == 'identities') \
@@ -180,8 +174,7 @@ def main(in_path, captions, out_path, host=None, init_run=False, force=False,
     if (script and script == 'black_frames') \
             or (not script and 'black_frames' not in disable):
         from components import detect_black_frames
-        detect_black_frames.main(in_path, out_path, init_run=init_run,
-                                 force=force)
+        detect_black_frames.main(in_path, out_path, init_run=init_run, force=force)
 
     if captions is not None:
         if (script and script == 'captions_copy') \

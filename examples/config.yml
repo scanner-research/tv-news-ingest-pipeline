@@ -10,16 +10,12 @@
 #   - caption_alignment
 #   - commercials
 
-# Docker-compose options
-# host: 127.0.0.1:2375
-
-# Scanner component options
-# num_pipelines: 8
-# stride: 3
+# Face component options
+# stride: 1
 
 # Face identification options
 # montage_width: 10
 # montage_height: 6
 # aws_access_key_id: KEY_ID GOES HERE
 # aws_secret_access_key: SECRET_KEY GOES HERE
-
+# aws_region: us-west-1

@@ -40,13 +40,10 @@ import time
 from tqdm import tqdm
 import boto3
 
+from util import config
 from util.consts import FILE_IDENTITIES, DIR_CROPS
-from util.config import AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, MONTAGE_WIDTH, MONTAGE_HEIGHT
 from components.montage_face_images import create_montage_bytes
 from util.utils import get_base_name, load_json, save_json
-
-SAVE_DEBUG_IMAGES = False
-CLIENT = None
 
 
 def get_args():
@@ -60,7 +57,7 @@ def get_args():
 
 
 def main(in_path, out_path, force=False):
-    if not AWS_ACCESS_KEY_ID or not AWS_SECRET_ACCESS_KEY:
+    if not config.AWS_ACCESS_KEY_ID or not config.AWS_SECRET_ACCESS_KEY:
         print('AWS credentials do not exist. Skipping face identification.')
         return
 
@@ -121,10 +118,12 @@ def process_video(crops_path, identities_outpath, max_threads=60):
                  key=lambda x: int(get_base_name(x)))]
 
     video_labels = []
+    n_rows = config.MONTAGE_HEIGHT
+    n_cols = config.MONTAGE_WIDTH
     with ThreadPoolExecutor(max_threads) as executor:
         futures = []
-        for i in range(0, len(img_files), MONTAGE_WIDTH * MONTAGE_HEIGHT):
-            img_span = img_files[i:i + MONTAGE_WIDTH * MONTAGE_HEIGHT]
+        for i in range(0, len(img_files), n_cols * n_rows):
+            img_span = img_files[i:i + n_cols * n_rows]
             futures.append(executor.submit(
                 submit_images_for_labeling, crops_path, img_span
             ))
@@ -275,9 +274,9 @@ def process_labeling_results(
 
 def load_client():
     session = boto3.session.Session()
-    return session.client('rekognition', aws_access_key_id=AWS_ACCESS_KEY_ID,
-                          aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-                          region_name='us-west-2')
+    return session.client('rekognition', aws_access_key_id=config.AWS_ACCESS_KEY_ID,
+                          aws_secret_access_key=config.AWS_SECRET_ACCESS_KEY,
+                          region_name=config.AWS_REGION)
 
 
 if __name__ == '__main__':

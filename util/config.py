@@ -3,7 +3,7 @@
 """
 File: config.py
 ---------------
-Contains config variables for the pipeline, read from the 'config' file.
+Contains config variables for the pipeline, read from the 'config.yml' file.
 
 """
 
@@ -20,8 +20,8 @@ CONFIG_KEYS = {
     'montage_height': 6,
     'aws_access_key_id': None,
     'aws_secret_access_key': None,
-    'disable': [],
-    'host': '127.0.0.1:2375'
+    'aws_region': 'us-west-1',
+    'disable': []
 }
 
 # Set config variables defaults
