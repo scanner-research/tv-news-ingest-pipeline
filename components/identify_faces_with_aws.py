@@ -277,7 +277,7 @@ def load_client():
     session = boto3.session.Session()
     return session.client('rekognition', aws_access_key_id=AWS_ACCESS_KEY_ID,
                           aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-                          region_name='us-west-1')
+                          region_name='us-west-2')
 
 
 if __name__ == '__main__':
