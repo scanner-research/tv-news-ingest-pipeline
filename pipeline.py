@@ -57,16 +57,9 @@ import argparse
 import multiprocessing as mp
 import os
 from pathlib import Path
-import shutil
-import subprocess
 import time
 
-from tqdm import tqdm
-
 from util import config
-from util.consts import FILE_CAPTIONS_ORIG
-from util.docker_compose_api import run_command_in_container
-from util.utils import get_base_name
 
 NAMED_COMPONENTS = [
     'face_component',
@@ -80,8 +73,23 @@ NAMED_COMPONENTS = [
 ]
 
 
-class PipelineException(Exception):
+class PipelineError(Exception):
+    """Base class for Pipeline errors."""
     pass
+
+
+class FileTypeNotSupportedError(PipelineError):
+    """For unsupported file types."""
+
+    def __init__(self, type, format, supported):
+        self.type = type
+        self.format = format
+        self.supported = supported
+
+        self.message = f'The {format} {type} format is not supported. ' \
+                       f'Try one of these instead: {supported}.'
+
+        super().__init__(self.message)
 
 
 def get_args():
@@ -133,35 +141,38 @@ def main(in_path, captions, out_path, init_run=False, force=False,
     # Validate file formats
     single = not in_path.endswith('.txt') and not os.path.isdir(in_path)
     if single and not in_path.endswith('.mp4'):
-        print('Only the mp4 video format is supported. Exiting.')
-        return
+        raise FileTypeNotSupportedError(
+            'video', Path(in_path).suffix.strip('.'), ['mp4']
+        )
 
     if single and captions is not None and not captions.endswith('.srt'):
-        print('Only the srt captions format is supported. Exiting.')
-        return
+        raise FileTypeNotSupportedError(
+            'captions', Path(captions).suffix.strip('.'), ['srt']
+        )
 
-    print('Creating output directories at "{}"...'.format(out_path))
-    video_paths, output_dirs = create_output_dirs(in_path, out_path, single)
+    n_videos = 1 if single else len([l for l in open(in_path, 'r') if l.strip()])
 
     # Step through each pipeline component
-    if (script and script == 'face_component') \
-            or (not script and 'face_component' not in disable):
-        from components import detect_faces_and_compute_embeddings
-        detect_faces_and_compute_embeddings.main(in_path, out_path, init_run, force)
+    should_run = lambda c: script and script == c or (not script and c not in disable)
 
+    if should_run('face_component'):
+        # Import component only when necessary, in case deps aren't installed
+        from components import detect_faces_and_compute_embeddings
+        detect_faces_and_compute_embeddings.main(in_path, out_path, init_run,
+                                                 force)
+
+    # Computation that relies on the outputs of the face component
+    # Separated to allow for parallel branches with `-p` flag
     def faces_path():
-        if (script and script == 'identities') \
-                or (not script and 'identities' not in disable):
+        if should_run('identities'):
             from components import identify_faces_with_aws
             identify_faces_with_aws.main(out_path, out_path, force=force)
 
-        if (script and script == 'identity_propagation') \
-                or (not script and 'identity_propagation' not in disable):
+        if should_run('identity_propagation'):
             from components import identity_propagation
             identity_propagation.main(out_path, out_path, force=force)
 
-        if (script and script == 'genders') \
-                or (not script and 'genders' not in disable):
+        if should_run('genders'):
             from components import classify_gender
             classify_gender.main(out_path, out_path, force=force)
 
@@ -171,24 +182,21 @@ def main(in_path, captions, out_path, init_run=False, force=False,
     else:
         faces_path()
 
-    if (script and script == 'black_frames') \
-            or (not script and 'black_frames' not in disable):
+    if should_run('black_frames'):
         from components import detect_black_frames
-        detect_black_frames.main(in_path, out_path, init_run=init_run, force=force)
+        detect_black_frames.main(in_path, out_path, init_run, force)
 
+    # Captions are optional so make sure they are provided
     if captions is not None:
-        if (script and script == 'captions_copy') \
-                or (not script and 'captions_copy' not in disable):
+        if should_run('captions_copy'):
             from components import copy_captions
             copy_captions.main(captions, out_path)
 
-        if (script and script == 'caption_alignment') \
-                or (not script and 'caption_alignment' not in disable):
+        if should_run('caption_alignment'):
             from components import caption_alignment
             caption_alignment.main(in_path, captions, out_path, force=force)
 
-    if (script and script == 'commercials') \
-            or (not script and 'commercials' not in disable):
+    if should_run('commercials'):
         from components import commercial_detection
         commercial_detection.main(out_path, out_path, force=force)
 
@@ -197,39 +205,8 @@ def main(in_path, captions, out_path, init_run=False, force=False,
 
     if not script:
         end = time.time()
-        print('Pipeline completed over {} videos in {:.2f} seconds.'.format(
-            len(video_paths), end - start))
-
-
-
-def create_output_dirs(in_path, out_path, single):
-    """
-    Creates output subdirectories for each video being processed.
-    Necessary due to docker container processes being owned by root.
-
-    Args:
-        in_path (str): path to a video file or batch text file containing
-                       filepaths
-        out_path (str): path to the output directory.
-        single (bool): whether the in_path is a single file or a batch.
-
-    Returns:
-        List[Path], List[Path]: a list of video filepaths and a list of output
-            directory paths.
-
-    """
-
-    if single:
-        video_paths = [in_path]
-
-    else:  # in_path is a batch text file
-        video_paths = [l.strip() for l in open(in_path, 'r') if l.strip()]
-
-    out_paths = [os.path.join(out_path, get_base_name(v)) for v in video_paths]
-    for out in out_paths:
-        os.makedirs(out, exist_ok=True)
-
-    return video_paths, out_paths
+        print(f'{"Script" if script else "Pipeline"} completed over {n_videos} '
+              f'videos in {end - start:.2f} seconds.')
 
 
 if __name__ == '__main__':

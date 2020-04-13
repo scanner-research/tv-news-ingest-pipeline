@@ -11,7 +11,7 @@
 #   - commercials
 
 # Face component options
-# stride: 1
+# interval: 1
 
 # Face identification options
 # montage_width: 10

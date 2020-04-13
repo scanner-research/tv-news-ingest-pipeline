@@ -1,9 +1,8 @@
-#!/usr/bin/env python3
-
 """
 File: config.py
 ---------------
 Contains config variables for the pipeline, read from the 'config.yml' file.
+Defaults are defined here.
 
 """
 
@@ -14,14 +13,18 @@ import yaml
 CONFIG_FILE = 'config.yml'
 
 CONFIG_KEYS = {
-    'num_pipelines': (max(os.cpu_count() // 4, 1) if os.cpu_count() else 1),
-    'stride': 1,
-    'montage_width': 10,
-    'montage_height': 6,
+    # General
+    'disable': [],
+
+    # Face component
+    'interval': 1, # seconds/sample
+
+    # Face identification with AWS
+    'montage_width': 10, # number of columns of images
+    'montage_height': 6, # number of rows of images
     'aws_access_key_id': None,
     'aws_secret_access_key': None,
     'aws_region': 'us-west-1',
-    'disable': []
 }
 
 # Set config variables defaults

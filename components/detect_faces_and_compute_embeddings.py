@@ -22,8 +22,7 @@ from util.consts import (
     FILE_BBOXES,
     FILE_EMBEDS,
     FILE_METADATA,
-    DIR_CROPS,
-    SCANNER_COMPONENT_OUTPUTS
+    DIR_CROPS
 )
 from util.utils import json_is_valid, save_json
 
@@ -39,26 +38,29 @@ def get_args():
                         help='running on videos for the first time')
     parser.add_argument('-f', '--force-rerun', action='store_true',
                         help='force rerun for all videos')
-    parser.add_argument('--interval', type=int, default=config.STRIDE,
+    parser.add_argument('--interval', type=int, default=config.INTERVAL,
                         help='interval length in seconds')
     parser.add_argument('-d', '--disable', nargs='+', choices=NAMED_COMPONENTS,
                         help='list of named components to disable')
     return parser.parse_args()
 
 
-def main(in_path, out_path, init_run=False, force=False, interval=config.STRIDE,
-         disable=None):
+def main(in_path, out_path, init_run=False, force=False,
+         interval=config.INTERVAL, disable=None):
     if in_path.endswith('.mp4'):
         video_paths = [Path(in_path)]
     else:
         video_paths = [Path(l.strip()) for l in open(in_path, 'r') if l.strip()]
 
     out_paths = [Path(out_path)/p.stem for p in video_paths]
+    for p in out_paths:
+        p.mkdir(parents=True, exist_ok=True)
+
     process_videos(video_paths, out_paths, init_run, force, interval, disable)
 
 
 def process_videos(video_paths, out_paths, init_run=False, force=False,
-                   interval=config.STRIDE, disable=None):
+                   interval=config.INTERVAL, disable=None):
     assert len(video_paths) == len(out_paths), ('Mismatch between video and '
                                                 'output paths')
 

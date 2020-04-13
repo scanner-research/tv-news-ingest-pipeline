@@ -51,7 +51,7 @@ advanced users can attempt to run it on MacOS.
 
 ### Setting Up
 
-1. Install Python3 (requires Python 3.5 or up)
+1. Install Python3 (requires Python 3.6 or up)
 
 2. Install Rust (specifically with `rustup` https://rustup.rs)
 
@@ -292,6 +292,11 @@ useful options or flags, all of which can be listed with
 * `-f, --force`: Forces recomputation of all outputs, and overwrites existing
   ones.
 
+* `-p, --parallel`: Runs the path dependent on the outputs of face_component
+  separate from the path of tasks independent of the face_component outputs.
+  (Note: the output of these paths will not be synchronized, and so will
+  overlap.)
+
 
 ## Configuration
 
@@ -308,6 +313,8 @@ repo [here](#examples/config.yml). The current configuration options are:
 * `aws_access_key_id`: your Amazon Rekognition access key ID.
 
 * `aws_secret_access_key`: your Amazon Rekognition secret access key.
+
+* `aws_region`: the region name that you'd like to make your query to.
 
 * `disable`: a list of the named components to disable.
 
