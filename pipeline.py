@@ -14,7 +14,7 @@ script takes the video(s) through the following stages:
 
     - extract face image crops (detect_faces_and_compute_embeddings.py)
 
-    - detect black frames (black_frame_detection.py)
+    - detect black frames (detect_black_frames.py)
 
     - identify faces (identify_faces_with_aws.py)
 
