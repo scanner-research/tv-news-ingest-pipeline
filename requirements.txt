@@ -9,3 +9,4 @@ rekallpy
 scikit-learn
 scipy
 tqdm
+tensorflow
