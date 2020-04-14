@@ -220,8 +220,12 @@ def create_batch_files(local_out_path, downloaded):
         files = list(filter(lambda x: x.startswith(identifier), files))
         captions = list(filter(lambda x: x.endswith('.srt'), files))
         captions = sorted(list(filter(lambda x: '.cc' in x, captions)))
-        os.rename(os.path.join(local_out_path, captions[0]),
-                  os.path.join(local_out_path, identifier + '.srt'))
+        try:
+            os.rename(os.path.join(local_out_path, captions[0]),
+                      os.path.join(local_out_path, identifier + '.srt'))
+        except IndexError as e:
+            print(identifier, 'is missing captions')
+            raise e
 
     # Batch captions file
     with open(BATCH_CAPTIONS_PATH, 'w') as f:
