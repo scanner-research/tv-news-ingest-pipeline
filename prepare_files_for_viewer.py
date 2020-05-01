@@ -7,12 +7,13 @@
 import argparse
 from collections import defaultdict
 import json
+import csv
 import os
 from pathlib import Path
 import shutil
 from subprocess import check_call
 import tempfile
-from typing import NamedTuple, List, Tuple
+from typing import NamedTuple, List, Tuple, Dict, Set
 
 from rs_intervalset.writer import (
     IntervalListMappingWriter, IntervalSetMappingWriter)
@@ -55,12 +56,15 @@ def get_args():
         '-u', '--update', action='store_true',
         help='Update existing files in place.')
 
+    parser.add_argument('--host-file', type=str,
+                        help='File containing list of hosts')
+
     parser.add_argument('--face-sample-rate', type=int, default=1,
                         help='Number of seconds per sample')
     return parser.parse_args()
 
 
-def main(in_path, out_path, index_dir, bbox_dir, overwrite, update,
+def main(in_path, out_path, index_dir, bbox_dir, overwrite, update, host_file,
          face_sample_rate):
     if os.path.exists(out_path):
         if overwrite:
@@ -150,6 +154,12 @@ def main(in_path, out_path, index_dir, bbox_dir, overwrite, update,
     # Task 5 & 6: Write out intervals for all faces on screen and separate
     # files for identities
     print('Saving face intervals')
+    if not host_file:
+        print('No host file specified: the host flag will not be set')
+        host_dict = read_host_csv(host_file)
+    else:
+        print('Host file:', host_file)
+        host_dict = {}
     people_ilist_dir = get_out_path('people')
     os.makedirs(people_ilist_dir, exist_ok=update)
     person_ilist_writers = {}
@@ -160,7 +170,7 @@ def main(in_path, out_path, index_dir, bbox_dir, overwrite, update,
     ) as writer:
         for video in new_videos:
             all_face_intervals, person_face_intervals = get_face_intervals(
-                in_path, video, face_sample_rate)
+                in_path, video, face_sample_rate, host_dict)
             if len(all_face_intervals) > 0:
                 writer.write(video.id, all_face_intervals)
             for person_name, person_intervals in person_face_intervals.items():
@@ -289,7 +299,12 @@ def get_commercial_intervals(video_dir: str, video: Video):
         return [format_commercial(c) for c in commercials]
 
 
-def get_face_intervals(video_dir: str, video: Video, face_sample_rate: int):
+def get_face_intervals(video_dir: str, video: Video, face_sample_rate: int,
+                       host_dict: Dict[str, Set[str]]):
+
+    def get_is_host(identity: str):
+        return (video.channel in host_dict
+                and identity.lower() in host_dict[video.channel])
 
     def load_file(name: str, second: str = '', optional: bool = False):
         fpath = os.path.join(video_dir, video.name, name)
@@ -319,15 +334,15 @@ def get_face_intervals(video_dir: str, video: Video, face_sample_rate: int):
         start_ms = int(start_time * 1000)
         end_ms = start_ms + int(1000 * face_sample_rate)
         face_height = face_meta['bbox']['y2'] - face_meta['bbox']['y1']
+        face_identity = identities.get(face_id)
         face_interval = (start_ms, end_ms, encode_face_interval_payload(
             gender_dict[genders.get(face_id, 'O').lower()],
-            False,
+            get_is_host(face_identity),
             min(round(face_height * 31), 31)    # 5-bits
         ))
         face_intervals.append(face_interval)
-        identity = identities.get(face_id)
-        if identity:
-            person_face_intervals[identity].append(face_interval)
+        if face_identity:
+            person_face_intervals[face_identity].append(face_interval)
 
     return face_intervals, person_face_intervals
 
@@ -399,6 +414,15 @@ def collect_caption_files(video_dir: str, videos: List[Video]):
         shutil.copyfile(src_path, dst_path)
 
     return tmp_dir
+
+
+def read_host_csv(host_file):
+    hosts = defaultdict(set)
+    with open(host_file) as fp:
+        reader = csv.DictReader(fp)
+        for row in reader:
+            hosts[row['channel']].add(row['name'].lower())
+    return hosts
 
 
 if __name__ == '__main__':
