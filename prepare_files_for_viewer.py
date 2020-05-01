@@ -156,10 +156,10 @@ def main(in_path, out_path, index_dir, bbox_dir, overwrite, update, host_file,
     print('Saving face intervals')
     if not host_file:
         print('No host file specified: the host flag will not be set')
-        host_dict = read_host_csv(host_file)
     else:
         print('Host file:', host_file)
-        host_dict = {}
+        host_dict = read_host_csv(host_file)
+
     people_ilist_dir = get_out_path('people')
     os.makedirs(people_ilist_dir, exist_ok=update)
     person_ilist_writers = {}
