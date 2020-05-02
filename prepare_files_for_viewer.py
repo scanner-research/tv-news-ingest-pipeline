@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import shutil
 from subprocess import check_call
+from multiprocessing import Pool
 import tempfile
 from tqdm import tqdm
 from typing import NamedTuple, List, Tuple, Dict, Set, Optional
@@ -143,14 +144,15 @@ def main(in_path, out_path, index_dir, bbox_dir, overwrite, update, host_file,
     print('Saving face bounding boxes')
     face_bbox_dir = bbox_dir if bbox_dir else get_out_path('face-bboxes')
     os.makedirs(face_bbox_dir, exist_ok=update)
-    for video in tqdm(new_videos):
-        try:
-            save_json(
-                format_bbox_file_data(in_path, video, face_sample_rate),
-                os.path.join(face_bbox_dir, '{}.json'.format(video.id))
-            )
-        except Exception as e:
-            print('Failed to write bboxes for {}: {}'.format(video.name, str(e)))
+    with Pool() as workers:
+        for _ in tqdm(workers.imap_unordered(
+            save_bboxes_for_video,
+            [
+                (in_path, video, face_sample_rate, face_bbox_dir)
+                for video in tqdm(new_videos)
+            ]
+        )):
+            pass
 
     # Task 5 & 6: Write out intervals for all faces on screen and separate
     # files for identities
@@ -161,7 +163,6 @@ def main(in_path, out_path, index_dir, bbox_dir, overwrite, update, host_file,
     else:
         print('Host file:', host_file)
         host_dict = read_host_csv(host_file)
-    print(host_dict)
 
     people_ilist_dir = get_out_path('people')
     os.makedirs(people_ilist_dir, exist_ok=update)
@@ -403,6 +404,17 @@ def format_bbox_file_data(video_dir: str, video: Video, face_sample_rate: int):
                 face_bbox['i'] = identity_to_id[identity]
         face_bboxes.append(face_bbox)
     return {'faces': face_bboxes, 'ids': list(identity_to_id.items())}
+
+
+def save_bboxes_for_video(args):
+    in_path, video, face_sample_rate, face_bbox_dir = args
+    try:
+        save_json(
+            format_bbox_file_data(in_path, video, face_sample_rate),
+            os.path.join(face_bbox_dir, '{}.json'.format(video.id))
+        )
+    except Exception as e:
+        print('Failed to write bboxes for {}: {}'.format(video.name, str(e)))
 
 
 def collect_caption_files(video_dir: str, videos: List[Video]):
