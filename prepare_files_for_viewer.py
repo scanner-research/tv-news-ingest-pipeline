@@ -145,13 +145,11 @@ def main(in_path, out_path, index_dir, bbox_dir, overwrite, update, host_file,
     face_bbox_dir = bbox_dir if bbox_dir else get_out_path('face-bboxes')
     os.makedirs(face_bbox_dir, exist_ok=update)
     with Pool() as workers:
+        bbox_tasks = [(in_path, video, face_sample_rate, face_bbox_dir)
+                      for video in new_videos]
         for _ in tqdm(workers.imap_unordered(
-            save_bboxes_for_video,
-            [
-                (in_path, video, face_sample_rate, face_bbox_dir)
-                for video in tqdm(new_videos)
-            ]
-        )):
+            save_bboxes_for_video, bbox_tasks
+        ), total=len(bbox_tasks)):
             pass
 
     # Task 5 & 6: Write out intervals for all faces on screen and separate
