@@ -18,6 +18,7 @@ GCS_OUTPUT_DIR = 'gs://esper/tvnews/ingest-pipeline/outputs'
 
 APP_DATA_PATH = '../esper-tv-widget/data/'
 INDEX_PATH = '../esper-tv-widget/index'
+HOST_FILE_PATH = '../esper-tv-widget/data/hosts.csv'
 
 LOCAL_OUTPUT_PATH = '/tmp/pipeline_outputs'
 
@@ -51,9 +52,9 @@ def main(year, local_out_path, gcs_output_path, num_processes):
         print('There are no video outputs to prepare at this time. Exiting.')
         return
 
-    cmd = ['python3', 'prepare_files_for_viewer.py', '-u', LOCAL_OUTPUT_PATH, APP_DATA_PATH, '--index-dir', INDEX_PATH]
-    if str(year).startswith('2019'):
-        cmd += ['--face-sample-rate', '3']
+    cmd = ['python3', 'prepare_files_for_viewer.py', '-u', LOCAL_OUTPUT_PATH,
+           APP_DATA_PATH, '--index-dir', INDEX_PATH, '--host-file',
+           HOST_FILE_PATH]
     subprocess.check_call(cmd)
 
     os.chdir('../esper-tv-widget')
@@ -91,18 +92,18 @@ def collect_and_send_daily_stats(downloaded):
             if meta['name'].startswith(channel):
                 per_channel[channel]['num_videos'] += 1
                 per_channel[channel]['total_sec'] += meta['frames'] / meta['fps']
-                
+
                 #path = os.path.join(LOCAL_OUTPUT_PATH, identifier, 'bboxes.json')
                 #per_channel[channel]['faces'] += len(json.load(open(path, 'r')))
-                
+
                 path = os.path.join(LOCAL_OUTPUT_PATH, identifier, 'commercials.json')
                 with open(path, 'r') as f:
                     commercials = json.load(f)
                 for interval in commercials:
                     per_channel[channel]['commercial_sec'] += (interval[1] - interval[0]) / meta['fps']
-                
+
                 break
-                
+
     date = datetime.datetime.now().strftime('%D')
     message = f'Daily stats update for {date}:\n' \
               f'================================\n' \
@@ -154,7 +155,12 @@ def download_unprepared_outputs(year, local_out_path, gcs_output_path, num_proce
 
 def download_pipeline_output(args):
     identifier, gcs_output_path, local_out_path = args
-    subprocess.check_call(['gsutil', '-m', 'cp', '-nr', os.path.join(gcs_output_path, identifier), './'])
+    # subprocess.check_call(['gsutil', '-m', 'cp', '-nr', os.path.join(gcs_output_path, identifier), './'])
+    subprocess.check_call([
+        'gsutil', '-m', 'rsync', '-x',
+        'embeddings\\.json|black_frames\\.json|alignment_stats\\.json',
+        '-r', os.path.join(gcs_output_path, identifier), './'
+    ])
 
 
 def list_processed_outputs():
