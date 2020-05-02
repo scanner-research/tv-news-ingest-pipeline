@@ -16,9 +16,9 @@ import time
 
 GCS_OUTPUT_DIR = 'gs://esper/tvnews/ingest-pipeline/outputs'
 
-APP_DATA_PATH = '../esper-tv-widget/data/'
-INDEX_PATH = '../esper-tv-widget/index'
-HOST_FILE_PATH = '../esper-tv-widget/data/hosts.csv'
+APP_DATA_PATH = '../tv-news-viewer/data/'
+INDEX_PATH = '../tv-news-viewer/index'
+HOST_FILE_PATH = '../tv-news-viewer/data/hosts.csv'
 
 LOCAL_OUTPUT_PATH = '/tmp/pipeline_outputs'
 
@@ -57,11 +57,11 @@ def main(year, local_out_path, gcs_output_path, num_processes):
            HOST_FILE_PATH]
     subprocess.check_call(cmd)
 
-    os.chdir('../esper-tv-widget')
+    os.chdir('../tv-news-viewer')
     subprocess.check_call(['python3', 'derive_data.py', '-i'])
 
     print('Collecting and emailing daily stats.')
-    collect_and_send_daily_stats(downloaded)
+    #collect_and_send_daily_stats(downloaded)
 
     print('Cleaning up local files.')
     shutil.rmtree(LOCAL_OUTPUT_PATH)
@@ -156,10 +156,12 @@ def download_unprepared_outputs(year, local_out_path, gcs_output_path, num_proce
 def download_pipeline_output(args):
     identifier, gcs_output_path, local_out_path = args
     # subprocess.check_call(['gsutil', '-m', 'cp', '-nr', os.path.join(gcs_output_path, identifier), './'])
+    local_out_dir = os.path.join(local_out_path, identifier)
+    os.makedirs(local_out_dir, exist_ok=True)
     subprocess.check_call([
         'gsutil', '-m', 'rsync', '-x',
-        'embeddings\\.json|black_frames\\.json|alignment_stats\\.json',
-        '-r', os.path.join(gcs_output_path, identifier), './'
+        '"embeddings\\.json|black_frames\\.json|alignment_stats\\.json"',
+        '-r', os.path.join(gcs_output_path, identifier), local_out_dir
     ])
 
 
