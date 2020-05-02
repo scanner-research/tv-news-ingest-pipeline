@@ -170,10 +170,8 @@ def main(in_path, out_path, index_dir, bbox_dir, overwrite, update, host_file,
         1,   # 1 byte of binary payload
         append=update
     ) as writer:
-        face_ilist_tasks = [
-            (in_path, video, face_sample_rate, host_dict)
-            for video in tqdm(new_videos)
-        ]
+        face_ilist_tasks = [(in_path, video, face_sample_rate, host_dict)
+                            for video in new_videos]
         for video, all_face_intervals, person_face_intervals in tqdm(
             workers.imap(get_face_intervals_for_video, face_ilist_tasks),
             total=len(face_ilist_tasks)
