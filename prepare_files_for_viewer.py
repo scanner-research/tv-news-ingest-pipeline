@@ -13,7 +13,8 @@ from pathlib import Path
 import shutil
 from subprocess import check_call
 import tempfile
-from typing import NamedTuple, List, Tuple, Dict, Set
+from tqdm import tqdm
+from typing import NamedTuple, List, Tuple, Dict, Set, Optional
 
 from rs_intervalset.writer import (
     IntervalListMappingWriter, IntervalSetMappingWriter)
@@ -118,7 +119,7 @@ def main(in_path, out_path, index_dir, bbox_dir, overwrite, update, host_file,
     with IntervalSetMappingWriter(
         get_out_path('commercials.iset.bin'), append=update
     ) as writer:
-        for video in new_videos:
+        for video in tqdm(new_videos):
             comm_intervals = get_commercial_intervals(in_path, video)
             if comm_intervals:
                 writer.write(video.id, comm_intervals)
@@ -142,7 +143,7 @@ def main(in_path, out_path, index_dir, bbox_dir, overwrite, update, host_file,
     print('Saving face bounding boxes')
     face_bbox_dir = bbox_dir if bbox_dir else get_out_path('face-bboxes')
     os.makedirs(face_bbox_dir, exist_ok=update)
-    for video in new_videos:
+    for video in tqdm(new_videos):
         try:
             save_json(
                 format_bbox_file_data(in_path, video, face_sample_rate),
@@ -156,9 +157,11 @@ def main(in_path, out_path, index_dir, bbox_dir, overwrite, update, host_file,
     print('Saving face intervals')
     if not host_file:
         print('No host file specified: the host flag will not be set')
+        host_dict = {}
     else:
         print('Host file:', host_file)
         host_dict = read_host_csv(host_file)
+    print(host_dict)
 
     people_ilist_dir = get_out_path('people')
     os.makedirs(people_ilist_dir, exist_ok=update)
@@ -168,7 +171,7 @@ def main(in_path, out_path, index_dir, bbox_dir, overwrite, update, host_file,
         1,   # 1 byte of binary payload
         append=update
     ) as writer:
-        for video in new_videos:
+        for video in tqdm(new_videos):
             all_face_intervals, person_face_intervals = get_face_intervals(
                 in_path, video, face_sample_rate, host_dict)
             if len(all_face_intervals) > 0:
@@ -302,9 +305,13 @@ def get_commercial_intervals(video_dir: str, video: Video):
 def get_face_intervals(video_dir: str, video: Video, face_sample_rate: int,
                        host_dict: Dict[str, Set[str]]):
 
-    def get_is_host(identity: str):
-        return (video.channel in host_dict
-                and identity.lower() in host_dict[video.channel])
+    channel = video.name.split('_', 1)[0]
+    if channel[-1] == 'W':
+        channel = channel[:-1]
+
+    def get_is_host(identity: Optional[str]):
+        return (identity and channel in host_dict
+                and identity.lower() in host_dict[channel])
 
     def load_file(name: str, second: str = '', optional: bool = False):
         fpath = os.path.join(video_dir, video.name, name)
