@@ -165,14 +165,19 @@ def main(in_path, out_path, index_dir, bbox_dir, overwrite, update, host_file,
     people_ilist_dir = get_out_path('people')
     os.makedirs(people_ilist_dir, exist_ok=update)
     person_ilist_writers = {}
-    with IntervalListMappingWriter(
+    with Pool() as workers, IntervalListMappingWriter(
         get_out_path('faces.ilist.bin'),
         1,   # 1 byte of binary payload
         append=update
     ) as writer:
-        for video in tqdm(new_videos):
-            all_face_intervals, person_face_intervals = get_face_intervals(
-                in_path, video, face_sample_rate, host_dict)
+        face_ilist_tasks = [
+            (in_path, video, face_sample_rate, host_dict)
+            for video in tqdm(new_videos)
+        ]
+        for video, all_face_intervals, person_face_intervals in tqdm(
+            workers.imap(get_face_intervals_for_video, face_ilist_tasks),
+            total=len(face_ilist_tasks)
+        ):
             if len(all_face_intervals) > 0:
                 writer.write(video.id, all_face_intervals)
             for person_name, person_intervals in person_face_intervals.items():
@@ -262,18 +267,7 @@ def load_existing_video_metadata(fpath: str):
 
 
 def get_video_metadata(video: Video) -> Tuple:
-    try:
-        channel, _, _, show = video.name.split('_', 3)
-    except ValueError:
-        #print("For the TV News Viewer, video names must follow the format "
-        #      "'CHANNEL_YYYYMMDD_hhmmss_SHOW'.")
-        #exit()
-        channel = video.name.split('_', 1)[0]
-        show = ''
-
-    if channel[-1] == 'W':
-        channel = channel[:-1]
-
+    channel, show = get_channel_show(video)
     return (
         video.id,
         video.name,
@@ -303,10 +297,7 @@ def get_commercial_intervals(video_dir: str, video: Video):
 
 def get_face_intervals(video_dir: str, video: Video, face_sample_rate: int,
                        host_dict: Dict[str, Set[str]]):
-
-    channel = video.name.split('_', 1)[0]
-    if channel[-1] == 'W':
-        channel = channel[:-1]
+    channel, _ = get_channel_show(video)
 
     def get_is_host(identity: Optional[str]):
         return (identity and channel in host_dict
@@ -317,7 +308,7 @@ def get_face_intervals(video_dir: str, video: Video, face_sample_rate: int,
         secondary = os.path.join(video_dir, video.name, second)
         if os.path.exists(fpath):
             return load_json(fpath)
-        elif second and  os.path.exists(secondary):
+        elif second and os.path.exists(secondary):
             return load_json(secondary)
         elif optional:
             return []
@@ -351,6 +342,28 @@ def get_face_intervals(video_dir: str, video: Video, face_sample_rate: int,
             person_face_intervals[face_identity].append(face_interval)
 
     return face_intervals, person_face_intervals
+
+
+def get_face_intervals_for_video(args):
+    in_path, video, face_sample_rate, host_dict = args
+    return (
+        video,
+        *get_face_intervals(in_path, video, face_sample_rate, host_dict))
+
+
+def get_channel_show(video: Video):
+    try:
+        channel, _, _, show = video.name.split('_', 3)
+    except ValueError:
+        #print("For the TV News Viewer, video names must follow the format "
+        #      "'CHANNEL_YYYYMMDD_hhmmss_SHOW'.")
+        #exit()
+        channel = video.name.split('_', 1)[0]
+        show = ''
+
+    if channel[-1] == 'W':
+        channel = channel[:-1]
+    return channel, show
 
 
 def format_bbox_file_data(video_dir: str, video: Video, face_sample_rate: int):
