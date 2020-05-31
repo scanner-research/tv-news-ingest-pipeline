@@ -211,6 +211,7 @@ def main(in_path, out_path, index_dir, bbox_dir, overwrite, update, host_file,
                 cmd = [
                     os.path.dirname(os.path.realpath(__file__))
                     + '/deps/caption-index/scripts/update_index.py',
+                    '--skip-existing-names',
                     '-d', tmp_dir,
                     index_dir
                 ]
@@ -218,7 +219,6 @@ def main(in_path, out_path, index_dir, bbox_dir, overwrite, update, host_file,
                 cmd = [
                     os.path.dirname(os.path.realpath(__file__))
                     + '/deps/caption-index/scripts/build_index.py',
-                    '--skip-existing-names',
                     '-d', tmp_dir,
                     '-o', index_dir
                 ]
