@@ -49,23 +49,33 @@ DEFAULT_VIDEO_ENDPOINT = '/static/videos'
 DEFAULT_INDEX_PATH = 'data/index'     # we saved the index under data
 ```
 
-You probably also want to change some of the defaults in the call to
-`build_app`.
+You also want to change some of the defaults in the call to
+`build_app`. See *** comments.
 
 ```
-app = build_app(
-  data_dir, index_dir, video_endpoint,
-  video_auth_endpoint=None,           # This is only needed if you have a
-                                      # private and public video source
-  min_date=datetime(2010, 1, 1),      # Change this
-  max_date=datetime(2019, 7, 31),     # Change this
-  tz=timezone('US/Eastern'),
-  min_person_screen_time=600,         # Make this 0 (600s by default)
-  default_aggregate_by='month',       # Change this to 'day'
-  default_text_window=0,
-  default_is_commercial=Ternary.false,
-  default_serve_from_archive=True,    # Change to False
-  data_version='dev')
+  app = build_app(
+      data_dir, index_dir, video_endpoint, 
+      video_auth_endpoint,                    # This is only needed if you have a
+                                              # private and public video source
+      fallback_to_archive=True,               # link videos directly from the archive
+                                              # *** Make this False
+      static_bbox_endpoint=None,
+      static_caption_endpoint=None,
+      host=None,
+      min_date=datetime(2010, 1, 1),
+      max_date=datetime(2029, 12, 31),
+      tz=timezone('US/Eastern'),
+      person_whitelist_file=None,
+      min_person_screen_time=60 * 60,                     # *** Make this 0 (3600s by default)
+      min_person_autocomplete_screen_time=10 * 60 * 60,   # *** Make this 0 (36000s by default)
+      hide_person_tags=True,
+      default_aggregate_by='month',           # *** Make this day unless you have years of data
+      default_text_window=0,
+      default_is_commercial=Ternary.false,
+      default_color_gender_bboxes=True,
+      allow_sharing=True,
+      data_version='dev',
+      show_uptime=True)
 ```
 
 Once that is done, run `./develop.py` and navigate to `http://localhost:8080`
