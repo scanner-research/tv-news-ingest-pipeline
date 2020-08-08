@@ -85,7 +85,7 @@ def main(in_path, out_path, index_dir, bbox_dir, overwrite, update, host_file,
     print('Found data for {} videos'.format(len(new_videos)))
 
     if update:
-        all_videos = load_existing_video_metadata(get_out_path('videos.json'))
+        all_videos, canonical_show_map = load_existing_video_metadata(get_out_path('videos.json'))
 
         # Check for duplicate videos
         all_video_names = set(x.name for x in all_videos)
@@ -100,6 +100,7 @@ def main(in_path, out_path, index_dir, bbox_dir, overwrite, update, host_file,
     else:
         print('Starting video ids from 0')
         all_videos = new_videos
+        canonical_show_map = {}
 
     # Task 1: Write out video metadata file
     #
@@ -112,7 +113,7 @@ def main(in_path, out_path, index_dir, bbox_dir, overwrite, update, host_file,
     #     ...
     # ]
     print('Saving video metadata')
-    save_json([get_video_metadata(v) for v in all_videos],
+    save_json([get_video_metadata(v, canonical_show_map) for v in all_videos],
                get_out_path('videos.json'))
 
     # Task 2: Write commercials intervals file
@@ -257,20 +258,29 @@ def load_videos(video_dir: str):
 
 
 def load_existing_video_metadata(fpath: str):
+    existing_canonical_show_map = {}
     videos = []
     with open(fpath) as fp:
         for v in json.load(fp):
-            vid, name, _, _, num_frames, fps, width, height = v
+            vid, name, channel, canonical_show, num_frames, fps, width, height = v
+            _, raw_show = get_channel_show(name)
+
+            # Infer the canonical show mapping
+            existing_canonical_show_map[
+                (channel.lower(), raw_show.lower())
+            ] = canonical_show
+
             videos.append(Video(vid, name, num_frames, fps, width, height))
-    return videos
+    return videos, existing_canonical_show_map
 
 
-def get_video_metadata(video: Video) -> Tuple:
-    channel, show = get_channel_show(video)
+def get_video_metadata(video: Video, canonical_show_map: Dict) -> Tuple:
+    channel, raw_show = get_channel_show(video)
+    canonical_show = canonical_show_map.get((channel.lower(), raw_show.lower()))
     return (
         video.id,
         video.name,
-        show,
+        raw_show if canonical_show is None else canonical_show,
         channel,
         video.num_frames,
         video.fps,
