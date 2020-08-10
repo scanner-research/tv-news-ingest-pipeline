@@ -9,7 +9,6 @@ from collections import defaultdict
 import json
 import csv
 import os
-from pathlib import Path
 import shutil
 from subprocess import check_call
 from multiprocessing import Pool
@@ -262,7 +261,7 @@ def load_existing_video_metadata(fpath: str):
     videos = []
     with open(fpath) as fp:
         for v in json.load(fp):
-            vid, name, channel, canonical_show, num_frames, fps, width, height = v
+            vid, name, canonical_show, channel, num_frames, fps, width, height = v
             _, raw_show = get_channel_show(name)
 
             # Infer the canonical show mapping
