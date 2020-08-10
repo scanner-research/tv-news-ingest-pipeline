@@ -372,7 +372,7 @@ def get_channel_show(video_name: str):
 
     if channel[-1] == 'W':
         channel = channel[:-1]
-    return channel, show
+    return channel, show.replace('_', ' ')
 
 
 def format_bbox_file_data(video_dir: str, video: Video, face_sample_rate: int):
