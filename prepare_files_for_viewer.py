@@ -275,7 +275,7 @@ def load_existing_video_metadata(fpath: str):
 
 
 def get_video_metadata(video: Video, canonical_show_map: Dict) -> Tuple:
-    channel, raw_show = get_channel_show(video)
+    channel, raw_show = get_channel_show(video.name)
     canonical_show = canonical_show_map.get((channel.lower(), raw_show.lower()))
     return (
         video.id,
@@ -306,7 +306,7 @@ def get_commercial_intervals(video_dir: str, video: Video):
 
 def get_face_intervals(video_dir: str, video: Video, face_sample_rate: int,
                        host_dict: Dict[str, Set[str]]):
-    channel, _ = get_channel_show(video)
+    channel, _ = get_channel_show(video.name)
 
     def get_is_host(identity: Optional[str]):
         return (identity and channel in host_dict
@@ -360,14 +360,14 @@ def get_face_intervals_for_video(args):
         *get_face_intervals(in_path, video, face_sample_rate, host_dict))
 
 
-def get_channel_show(video: Video):
+def get_channel_show(video_name: str):
     try:
-        channel, _, _, show = video.name.split('_', 3)
+        channel, _, _, show = video_name.split('_', 3)
     except ValueError:
         #print("For the TV News Viewer, video names must follow the format "
         #      "'CHANNEL_YYYYMMDD_hhmmss_SHOW'.")
         #exit()
-        channel = video.name.split('_', 1)[0]
+        channel = video_name.split('_', 1)[0]
         show = ''
 
     if channel[-1] == 'W':
