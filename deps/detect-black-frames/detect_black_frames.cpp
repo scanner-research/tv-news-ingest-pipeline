@@ -114,7 +114,7 @@ int main(int argc, char *argv[]) {
                 for (size_t frameNum = startFrame; frameNum < endFrame; frameNum++) {
                     cv::Mat frame;
                     video >> frame;
-		            if (frame.empty()) break;
+                    if (frame.empty()) break;
 
                     cv::Mat grayFrame;
                     cv::cvtColor(frame, grayFrame, cv::COLOR_BGR2GRAY);
