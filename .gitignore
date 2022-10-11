@@ -12,7 +12,8 @@ debug/
 -examples/**/*.mp4
 .DS_Store
 components/data/
-deps/detect-black-frames/opencv-4.2.0/
+daily_process_tmp/
+deps/detect-black-frames/opencv-4.*
 deps/detect-black-frames/CMakeCache.txt
 deps/detect-black-frames/CMakeFiles/
 deps/detect-black-frames/Makefile

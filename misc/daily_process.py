@@ -95,6 +95,7 @@ def get_args():
 
 
 def main(year, local_out_path, gcs_video_path, num_processes):
+    start_time = time.time()
 
     # Make sure this is not currently running
     if not lock_script():
@@ -128,7 +129,7 @@ def main(year, local_out_path, gcs_video_path, num_processes):
     sys.stdout.flush()
     shutil.rmtree(WORKING_DIR)
 
-    print('Done.')
+    print('Done. ({:d} seconds elapsed)'.format(int(time.time() - start_time)))
     sys.stdout.flush()
 
 
@@ -307,12 +308,14 @@ def create_batch_files(local_out_path, downloaded):
 
     # Batch videos file
     with open(BATCH_VIDEOS_PATH, 'w') as f:
-        lines = [os.path.join(local_out_path, i, i + '.mp4') for i in downloaded]
+        lines = [os.path.join(local_out_path, i, i + '.mp4')
+                 for i in downloaded]
         f.write('\n'.join(lines))
 
     # Batch captions file
     with open(BATCH_CAPTIONS_PATH, 'w') as f:
-        lines = [os.path.join(local_out_path, i, i + '.srt') for i in downloaded]
+        lines = [os.path.join(local_out_path, i, i + '.srt')
+                 for i in downloaded]
         f.write('\n'.join(lines))
 
 

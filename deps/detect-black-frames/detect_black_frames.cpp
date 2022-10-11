@@ -78,6 +78,8 @@ void getArgs(int argc, char *argv[]) {
 }
 
 int main(int argc, char *argv[]) {
+    cv::setNumThreads(0);
+
     getArgs(argc, argv);
 
     PathsList videoPaths;
