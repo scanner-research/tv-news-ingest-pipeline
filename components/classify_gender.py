@@ -17,22 +17,24 @@ Example
 
         output_dir/
         ├── video1
-        │   └── genders.json
+        │   └── genders.json
         └── video2
-            └── genders.json
+            └── genders.json
 
 """
 
 import argparse
-from multiprocessing import Pool
 import os
+import sys
+import time
 from pathlib import Path
 
+sys.path.append('.')
+
 import numpy as np
-from tqdm import tqdm
 from sklearn.neighbors import KNeighborsClassifier
 
-from util.utils import save_json, load_json, get_base_name
+from util.utils import save_json, load_json, format_hmmss
 from util.consts import FILE_EMBEDS, FILE_GENDERS
 
 GENDER_TRAIN_X_FILE = 'components/gender_model/train_X.npy'
@@ -84,41 +86,49 @@ def main(in_path, out_path, force=False):
 
     if not video_names:
         print('All videos have existing gender classifications.')
+        sys.stdout.flush()
         return
 
     if msg:
         print(*msg, sep='\n')
+        sys.stdout.flush()
 
-    with Pool() as workers, tqdm(
-        total=len(video_names), desc='Classifying genders', unit='video'
-    ) as pbar:
-        for video_name, output_dir in zip(video_names, out_paths):
-            embeds_path = in_path/video_name/FILE_EMBEDS
-            genders_outpath = output_dir/FILE_GENDERS
-            workers.apply_async(
-                process_single,
-                args=(str(embeds_path), str(genders_outpath)),
-                callback=lambda x: pbar.update())
+    start_time = time.time()
+    for i in range(len(video_names)):
+        print('Classifying gender ({:0.1f} % done, {} elapsed)'.format(
+            i / len(video_names) * 100, format_hmmss(time.time() - start_time)))
+        sys.stdout.flush()
+        embeds_path = in_path/video_names[i]/FILE_EMBEDS
+        genders_outpath = out_paths[i]/FILE_GENDERS
+        process_single(str(embeds_path), str(genders_outpath))
 
-        workers.close()
-        workers.join()
+    print('Done classifying gender. {} elapsed'.format(
+        format_hmmss(time.time() - start_time)))
+    sys.stdout.flush()
+
+
+# def process_single(in_file, out_file):
+#     # Load the detected faces and embeddings and run the classifier
+#     result = [(face_id, *predict_gender_and_score(embed))
+#               for face_id, embed in load_json(in_file)]
+#     save_json(result, out_file)
+
+
+# def predict_gender_and_score(x):
+#     p = clf.predict_proba([x])[0]
+#     return 'F' if p[1] > p[0] else 'M', max(p)
 
 
 def process_single(in_file, out_file):
-    # Load the detected faces and embeddings and run the classifier
-    result = [(face_id, predict_gender(embed), predict_gender_score(embed))
-              for face_id, embed in load_json(in_file)]
+    face_ids, embs = zip(*load_json(in_file))
+    pr = clf.predict_proba(embs)
+    score = np.max(pr, axis=1)
 
+    assert pr.shape == (len(face_ids), 2)
+    assert score.shape == (len(face_ids),)
+    result = [(face_id, 'F' if pr[i, 1] > pr[i, 0] else 'M', score[i].item()) 
+              for i, face_id in enumerate(face_ids)]
     save_json(result, out_file)
-
-
-def predict_gender(x):
-    return 'F' if clf.predict([x]) == 1 else 'M'
-
-
-def predict_gender_score(x):
-    # FIXME: this was not tested. Need to check if this is sane
-    return max(clf.predict_proba([x])[0])
 
 
 if __name__ == '__main__':

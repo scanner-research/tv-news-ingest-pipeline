@@ -1,16 +1,15 @@
+import argparse
 from concurrent.futures import ThreadPoolExecutor
-from functools import partial
 import math
-import multiprocessing as mp
 import os
+import sys
+import time
 from pathlib import Path
-import pickle
 from PIL import Image
 from threading import Thread
 
 import cv2
-from tqdm import tqdm
-from tqdm import trange
+cv2.setNumThreads(0)
 
 # Suppress tensorflow warnings
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -24,9 +23,16 @@ from util.consts import (
     FILE_METADATA,
     DIR_CROPS
 )
-from util.utils import json_is_valid, save_json
+from util.utils import json_is_valid, save_json, format_hmmss
 
 MODELS_DIR = 'components/data'
+
+
+NAMED_COMPONENTS = [
+    'face_detection',
+    'face_embedding',
+    'face_crops',
+]
 
 
 def get_args():
@@ -84,25 +90,32 @@ def process_videos(video_paths, out_paths, init_run=False, force=False,
     video_names = [vid.stem for vid in video_paths]
     if not video_names:
         print('All videos have existing outputs.')
+        sys.stdout.flush()
         return
 
     face_embedder, face_detector = load_models(MODELS_DIR)
 
+    print('Collecting metadata for {} videos'.format(len(video_names)))
+    sys.stdout.flush()
     all_metadata = [
         get_video_metadata(video_names[i], video_paths[i])
-        for i in trange(len(video_names), desc='Collecting metadata', unit='video')
+        for i in range(len(video_names))
     ]
 
     n_threads = os.cpu_count() if os.cpu_count() else 1
 
     total_sec = int(sum(math.floor(m['frames'] / m['fps'] / interval) for m in all_metadata))
 
-    pbar = tqdm(total=total_sec, desc='Processing videos', unit='frame')
+    done_sec = 0
+    start_time = time.time()
     for vid_id in range(len(video_names)):
         path = video_paths[vid_id]
         meta = all_metadata[vid_id]
 
-        pbar.set_description('Processing videos: {}'.format(meta['name']))
+        print('Processing video: {} ({:0.1f} % done, {} elapsed)'.format(
+            meta['name'], done_sec / total_sec * 100, 
+            format_hmmss(time.time() - start_time)))
+        sys.stdout.flush()
         thread_bboxes = [[] for _ in range(n_threads)]
         thread_crops = [[] for _ in range(n_threads)]
         thread_embeddings = [[] for _ in range(n_threads)]
@@ -110,7 +123,7 @@ def process_videos(video_paths, out_paths, init_run=False, force=False,
         threads = [Thread(
             target=thread_task,
             args=(str(path), meta, interval, n_threads, i, thread_bboxes, thread_crops,
-                  thread_embeddings, face_embedder, face_detector, pbar)
+                  thread_embeddings, face_embedder, face_detector)
         ) for i in range(n_threads)]
 
         for t in threads:
@@ -131,26 +144,36 @@ def process_videos(video_paths, out_paths, init_run=False, force=False,
         if any(len(x) != target_sec for x in [all_bboxes, all_crops, all_embeddings]):
             # Error decoding video
             print('\nThere was an error decoding video \'{}\'. Skipping.'.format(meta['name']))
+            sys.stdout.flush()
             continue
 
-        pbar.set_description('Saving metadata for {}'.format(meta['name']))
+        print('Saving metadata for {}'.format(meta['name']))
+        sys.stdout.flush()
         out_path = out_paths[vid_id]
         metadata_outpath = out_path/FILE_METADATA
         save_json(meta, str(metadata_outpath))
 
-        pbar.set_description('Saving bboxes for {}'.format(meta['name']))
+        print('Saving bboxes for {}'.format(meta['name']))
+        sys.stdout.flush()
         bbox_outpath = out_path/FILE_BBOXES
         handle_face_bboxes_results(all_bboxes, meta['fps'] * interval, str(bbox_outpath))
 
-        pbar.set_description('Saving embeddings for {}'.format(meta['name']))
+        print('Saving embeddings for {}'.format(meta['name']))
+        sys.stdout.flush()
         embed_outpath = out_path/FILE_EMBEDS
         handle_face_embeddings_results(all_embeddings, str(embed_outpath))
 
-        pbar.set_description('Saving crops for {}'.format(meta['name']))
+        print('Saving crops for {}'.format(meta['name']))
+        sys.stdout.flush()
         crops_outpath = out_path/DIR_CROPS
         handle_face_crops_results(all_crops, str(crops_outpath))
 
-    pbar.close()
+        done_sec += target_sec
+
+    print('Processed {} videos in {}'.format(
+        len(video_names), format_hmmss(time.time() - start_time)))
+    sys.stdout.flush()
+
     face_embedder.close()
     face_detector.close()
 
@@ -175,12 +198,13 @@ def get_video_metadata(video_name: str, video_path: Path):
 BATCH_SIZE = 16
 def thread_task(in_path, metadata, interval, n_threads, thread_id,
                 thread_bboxes, thread_crops, thread_embeddings, face_embedder,
-                face_detector, pbar):
+                face_detector):
 
     video = cv2.VideoCapture(in_path)
 
     if not video.isOpened():
-        print('Error opening video file.')
+        print('Error opening video file.', in_path)
+        sys.stdout.flush()
         return
 
     n_sec = math.floor(metadata['frames'] / metadata['fps'] / interval)
@@ -219,7 +243,6 @@ def thread_task(in_path, metadata, interval, n_threads, thread_id,
         thread_bboxes[thread_id].extend(detected_faces)
         thread_embeddings[thread_id].extend(embeddings)
         thread_crops[thread_id].extend(crops)
-        pbar.update(len(frames))
 
     video.release()
 

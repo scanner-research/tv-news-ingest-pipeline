@@ -4,6 +4,7 @@ aws-credentials.csv
 config.yml
 docker-compose.yml
 db_name
+*.pyc
 *.mp4
 debug/
 */**/__pycache__/

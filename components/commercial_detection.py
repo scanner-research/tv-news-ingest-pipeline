@@ -1,17 +1,18 @@
 from multiprocessing import Pool
 import os
+import sys
+import time
 from pathlib import Path
 
 import pysrt
-from rekall import Interval, IntervalSet, IntervalSetMapping, Bounds3D
+from rekall import Interval, IntervalSet, Bounds3D
 from rekall.predicates import after, or_pred, overlaps
-from tqdm import tqdm
 
 from util.consts import (FILE_BLACK_FRAMES,
                          FILE_CAPTIONS,
                          FILE_METADATA,
                          FILE_COMMERCIALS)
-from util.utils import load_json, save_json
+from util.utils import load_json, save_json, format_hmmss
 
 BLACK_FRAME_COALESCE_EPSILON = 2
 CAPTIONS_COALESCE_EPSILON = 2
@@ -63,15 +64,17 @@ def main(in_path, out_path, force=False):
 
     if not video_names:
         print('All videos have existing detected commercials.')
+        sys.stdout.flush()
         return
 
     if msg:
         print(*msg, sep='\n')
+        sys.stdout.flush()
 
+    start_time = time.time()
+    print('Detecting commercials in {} videos'.format(len(video_names)))
 
-    with Pool() as workers, tqdm(
-        total=len(video_names), desc='Detecting commercials', unit='video'
-    ) as pbar:
+    with Pool() as workers:
         for video_name, output_dir in zip(video_names, out_paths):
             black_frames_path = in_path/video_name/FILE_BLACK_FRAMES
             captions_path = in_path/video_name/FILE_CAPTIONS
@@ -81,12 +84,13 @@ def main(in_path, out_path, force=False):
             workers.apply_async(
                 process_single,
                 args=(str(black_frames_path), str(captions_path),
-                      str(metadata_path), str(commercials_outpath)),
-                callback=lambda x: pbar.update()
+                      str(metadata_path), str(commercials_outpath))
             )
 
         workers.close()
         workers.join()
+    print('Done detecting commercials. {} elapsed'.format(
+        format_hmmss(time.time() - start_time)))
 
 
 def process_single(black_frames_path, captions_path, metadata_path,

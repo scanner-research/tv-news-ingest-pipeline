@@ -1,6 +1,6 @@
 from pathlib import Path
+import sys
 import shutil
-from tqdm import tqdm
 
 from util.consts import FILE_CAPTIONS_ORIG
 
@@ -29,12 +29,13 @@ def main(in_path, out_path):
 
     if not captions_paths:
         print('All videos have existing original captions.')
+        sys.stdout.flush()
         return
 
     if msg:
         print(*msg, sep='\n')
 
-    for src, dest in zip(tqdm(captions_paths, desc='Copying original captions',
-        unit='video'), out_paths
-    ):
+    print('Copying original captions')
+    sys.stdout.flush()
+    for src, dest in zip(captions_paths, out_paths):
         shutil.copy(src, dest)

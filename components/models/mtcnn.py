@@ -1,8 +1,11 @@
 import math
 import sys
-import tensorflow as tf
-import numpy as np
 from collections import namedtuple
+import numpy as np
+import tensorflow as tf
+
+# For backwards compatibility with V1
+tf.compat.v1.disable_eager_execution()
 
 BoundingBox = namedtuple('BoundingBox', ['x1', 'x2', 'y1', 'y2'])
 

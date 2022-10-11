@@ -10,7 +10,6 @@ import datetime
 import subprocess
 from subprocess import check_output, check_call
 import subprocess
-from tqdm import tqdm
 from multiprocessing import Pool
 
 prefixes = ['MSNBC', 'MSNBCW', 'CNN', 'CNNW', 'FOXNEWS', 'FOXNEWSW']

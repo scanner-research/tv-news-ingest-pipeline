@@ -18,9 +18,9 @@ Example
 
         output_dir/
         ├── video1
-        │   └── identities.json
+        │   └── identities.json
         └── video2
-            └── identities.json
+            └── identities.json
 
 where there is one JSON file per video containing a list of (face_id, identity)
 tuples.
@@ -29,21 +29,19 @@ tuples.
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor
-import json
 import math
 from multiprocessing import Pool
 import os
+import sys
 from pathlib import Path
-from PIL import Image, ImageDraw
 import time
 
-from tqdm import tqdm
 import boto3
 
 from util import config
 from util.consts import FILE_IDENTITIES, DIR_CROPS
 from components.montage_face_images import create_montage_bytes
-from util.utils import get_base_name, load_json, save_json
+from util.utils import get_base_name, load_json, save_json, format_hmmss
 
 
 def get_args():
@@ -59,6 +57,7 @@ def get_args():
 def main(in_path, out_path, force=False):
     if not config.AWS_ACCESS_KEY_ID or not config.AWS_SECRET_ACCESS_KEY:
         print('AWS credentials do not exist. Skipping face identification.')
+        sys.stdout.flush()
         return
 
     video_names = list(os.listdir(in_path))
@@ -87,28 +86,31 @@ def main(in_path, out_path, force=False):
 
     if not video_names:
         print('All videos have existing face identities.')
+        sys.stdout.flush()
         return
 
     if msg:
         print(*msg, sep='\n')
+        sys.stdout.flush()
 
     num_workers = min(len(video_names), 4)
     num_threads_per_worker = 60 // num_workers  # prevent throttling
 
-    with Pool(num_workers) as workers, tqdm(
-        total=len(video_names), desc='Identifying faces', unit='video'
-    ) as pbar:
+    start_time = time.time()
+    print('Identifying faces in {} videos'.format(len(video_names)))
+    with Pool(num_workers) as workers:
         for video_name, output_dir in zip(video_names, out_paths):
             crops_path = in_path/video_name/DIR_CROPS
             identities_outpath = output_dir/FILE_IDENTITIES
             workers.apply_async(
                 process_video,
                 args=(str(crops_path), str(identities_outpath),
-                      num_threads_per_worker),
-                callback=lambda x: pbar.update())
+                      num_threads_per_worker))
 
         workers.close()
         workers.join()
+    print('Done identifying faces. {} elapased'.format(
+        format_hmmss(time.time() - start_time)))
 
 
 def process_video(crops_path, identities_outpath, max_threads=60):
@@ -164,10 +166,12 @@ def submit_images_for_labeling(crops_path, img_files):
 
     except AssertionError as e:
         print(e)
+        sys.stdout.flush()
         raise
 
     except Exception as e:
         print(e)
+        sys.stdout.flush()
         raise
 
 
@@ -183,7 +187,8 @@ def search_aws(img_data, client):
             return resp
         except Exception as e:
             delay = 2 ** i
-            tqdm.write('Error (retry in {}s): {}'.format(delay, e))
+            print('Error (retry in {}s): {}'.format(delay, e))
+            sys.stdout.flush()
             time.sleep(delay)
     raise Exception('Too many timeouts: {}'.format(e))
 

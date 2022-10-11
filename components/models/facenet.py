@@ -1,8 +1,11 @@
 import os
 import cv2
 import sys
-import tensorflow as tf
 import numpy as np
+import tensorflow as tf
+
+# For backwards compatibility with V1
+tf.compat.v1.disable_eager_execution()
 
 
 class FaceNetEmbed(object):
@@ -38,14 +41,7 @@ class FaceNetEmbed(object):
             facenet.prewhiten(cv2.resize(img, (self.in_size, self.in_size)))
             for img in imgs
         ]
-        #for img in imgs:
-        #    [fh, fw] = img.shape[:2]
 
-            #if fh == 0 or fw == 0:
-            #    return np.zeros(128, dtype=np.float32).tobytes()
-            #else:
-        #    img = cv2.resize(img, (self.in_size, self.in_size))
-        #    img = facenet.prewhiten(img)
         embs = self.session.run(
             self.embeddings,
             feed_dict={

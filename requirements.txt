@@ -1,12 +1,12 @@
 boto3
 internetarchive
-numpy
-opencv-python-headless
+numpy==1.23.3
+opencv-python-headless==4.6.0.66
 pysrt
 pyyaml
 Pillow
 rekallpy
-scikit-learn
-scipy
+scikit-learn==1.1.2
+scipy==1.9.2
 tqdm
-tensorflow
+tensorflow-cpu==2.10.0

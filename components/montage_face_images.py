@@ -10,7 +10,6 @@ be sent to face identification services (like AWS).
 
 import cv2
 import io
-import json
 
 import numpy as np
 from PIL import Image

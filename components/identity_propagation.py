@@ -1,16 +1,16 @@
 from collections import Counter
-import json
 from multiprocessing import Pool
 import os
+import sys
 from pathlib import Path
+import time
 
 import numpy as np
 from sklearn.metrics.pairwise import euclidean_distances
-from tqdm import tqdm
 
 from util.consts import (FILE_IDENTITIES, FILE_EMBEDS,
                          FILE_IDENTITIES_PROP)
-from util.utils import load_json, save_json
+from util.utils import format_hmmss, load_json, save_json
 
 PROB_THRESH = 0.9
 MIN_LABEL_THRESH = 5
@@ -49,14 +49,17 @@ def main(in_path, out_path, force=False):
 
     if not video_names:
         print('All videos have existing propagated identities or are missing inputs.')
+        sys.stdout.flush()
         return
 
     if msg:
         print(*msg, sep='\n')
+        sys.stdout.flush()
 
-    with Pool() as workers, tqdm(
-        total=len(video_names), desc='Propagating identities', unit='video'
-    ) as pbar:
+    start_time = time.time()
+    print('Propagating identities in {} videos'.format(len(video_names)))
+    sys.stdout.flush()
+    with Pool() as workers:
         for video_name, output_dir in zip(video_names, out_paths):
             identities_path = os.path.join(in_path, video_name,
                                            FILE_IDENTITIES)
@@ -66,13 +69,14 @@ def main(in_path, out_path, force=False):
             if force or not os.path.exists(propagated_ids_outpath):
                 workers.apply_async(
                     process_single,
-                    args=(identities_path, embeds_path, propagated_ids_outpath),
-                    callback=lambda x: pbar.update())
-            else:
-                pbar.update()
+                    args=(identities_path, embeds_path, propagated_ids_outpath))
 
         workers.close()
         workers.join()
+    
+    print('Done propagating identities. {} elapsed'.format(
+        format_hmmss(time.time() - start_time)))
+    sys.stdout.flush()
 
 
 def process_single(identities_path, embeds_path, propagated_ids_outpath):

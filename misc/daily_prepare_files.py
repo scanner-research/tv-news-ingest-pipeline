@@ -14,7 +14,8 @@ import subprocess
 import time
 
 
-GCS_OUTPUT_DIR = 'gs://esper/tvnews/ingest-pipeline/outputs'
+GCS_OUTPUT_DIR = 'gs://tvnews-ingest/pipeline-outputs'
+GCS_SYNC_DIR = 'gs://tvnews-ingest/pipeline-sync'
 
 APP_DATA_PATH = '../tv-news-viewer/data/'
 INDEX_PATH = '../tv-news-viewer/index'
@@ -191,13 +192,13 @@ def list_pipeline_outputs(year, gcs_output_path):
 
 def sync_with_worker():
     while True:
-        cmd = ['gsutil', 'mv', 'gs://esper/tvnews/ingest-pipeline/tmp/.placeholder',
-               'gs://esper/tvnews/ingest-pipeline/tmp/.downloading']
+        cmd = ['gsutil', 'mv', GCS_SYNC_DIR + '/.placeholder',
+               GCS_SYNC_DIR + '/.downloading']
         proc = subprocess.run(cmd)
         if proc.returncode == 0:
             return
 
-        cmd = ['gsutil', 'ls', 'gs://esper/tvnews/ingest-pipeline/tmp/.uploading']
+        cmd = ['gsutil', 'ls', GCS_SYNC_DIR + '/.uploading']
         proc = subprocess.run(cmd)
 
         if proc.returncode != 0:
@@ -207,8 +208,8 @@ def sync_with_worker():
 
 
 def unsync_with_worker():
-    cmd = ['gsutil', 'mv', 'gs://esper/tvnews/ingest-pipeline/tmp/.downloading',
-           'gs://esper/tvnews/ingest-pipeline/tmp/.placeholder']
+    cmd = ['gsutil', 'mv', GCS_SYNC_DIR + '/.downloading',
+           GCS_SYNC_DIR + '/.placeholder']
     subprocess.run(cmd, check=True)
 
 

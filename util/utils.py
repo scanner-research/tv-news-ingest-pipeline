@@ -75,3 +75,11 @@ def json_is_valid(path: str) -> bool:
         return False
 
     return True
+
+
+def format_hmmss(s):
+    h = int(s / 3600)
+    s -= h * 3600
+    m = int(s / 60)
+    s -= m * 60
+    return '{:d}h {:02d}m {:02d}s'.format(h, m, int(s))

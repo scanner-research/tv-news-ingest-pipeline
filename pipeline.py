@@ -33,22 +33,22 @@ Sample output directory after pipeline completion:
 
     output_dir/
     ├── video1
-    │   ├── alignment_stats.json
-    │   ├── bboxes.json
-    │   ├── black_frames.json
-    │   ├── embeddings.json
-    │   ├── genders.json
-    │   ├── identities.json
-    │   ├── identities_propagated.json
-    │   ├── metadata.json
-    │   ├── captions.srt
-    │   ├── captions_orig.srt
-    │   ├── commercials.json
-    │   └── crops
-    │       ├── 0.png
-    │       └── 1.png
+    │   ├── alignment_stats.json
+    │   ├── bboxes.json
+    │   ├── black_frames.json
+    │   ├── embeddings.json
+    │   ├── genders.json
+    │   ├── identities.json
+    │   ├── identities_propagated.json
+    │   ├── metadata.json
+    │   ├── captions.srt
+    │   ├── captions_orig.srt
+    │   ├── commercials.json
+    │   └── crops
+    │       ├── 0.png
+    │       └── 1.png
     ├── video2
-    │   └── ...
+    │   └── ...
     └── ...
 
 """
@@ -56,6 +56,7 @@ Sample output directory after pipeline completion:
 import argparse
 import multiprocessing as mp
 import os
+import sys
 from pathlib import Path
 import time
 
@@ -158,12 +159,12 @@ def main(in_path, captions, out_path, init_run=False, force=False,
     if should_run('face_component'):
         # Import component only when necessary, in case deps aren't installed
         from components import detect_faces_and_compute_embeddings
-        detect_faces_and_compute_embeddings.main(in_path, out_path, init_run,
-                                                 force)
+        detect_faces_and_compute_embeddings.main(
+            in_path, out_path, init_run, force)
 
     # Computation that relies on the outputs of the face component
     # Separated to allow for parallel branches with `-p` flag
-    def faces_path():
+    def face_id_path():
         if should_run('identities'):
             from components import identify_faces_with_aws
             identify_faces_with_aws.main(out_path, out_path, force=force)
@@ -172,15 +173,15 @@ def main(in_path, captions, out_path, init_run=False, force=False,
             from components import identity_propagation
             identity_propagation.main(out_path, out_path, force=force)
 
-        if should_run('genders'):
-            from components import classify_gender
-            classify_gender.main(out_path, out_path, force=force)
-
     if parallel:
-        proc = mp.Process(target=faces_path)
+        proc = mp.Process(target=face_id_path)
         proc.start()
     else:
-        faces_path()
+        face_id_path()
+
+    if should_run('genders'):
+        from components import classify_gender
+        classify_gender.main(out_path, out_path, force=force)
 
     if should_run('black_frames'):
         from components import detect_black_frames
@@ -207,6 +208,7 @@ def main(in_path, captions, out_path, init_run=False, force=False,
         end = time.time()
         print(f'{"Script" if script else "Pipeline"} completed over {n_videos} '
               f'videos in {end - start:.2f} seconds.')
+        sys.stdout.flush()
 
 
 if __name__ == '__main__':

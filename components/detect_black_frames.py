@@ -24,23 +24,25 @@ Example
 
         output_dir/
         ├── video1
-        │   └── black_frames.json
+        │   └── black_frames.json
         └── video2
-            └── black_frames.json
+            └── black_frames.json
 
 """
 
 import argparse
 import subprocess
 import os
+import sys
+import time
 from pathlib import Path
-from tqdm import tqdm
 
 from util.consts import FILE_BLACK_FRAMES
-from util.utils import json_is_valid
+from util.utils import json_is_valid, format_hmmss
 
 NUM_THREADS = os.cpu_count() if os.cpu_count() else 1
 BINARY_PATH = 'deps/detect-black-frames/detect_black_frames'
+
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -62,24 +64,30 @@ def main(in_path, out_path, init_run=False, force=False):
 
     out_paths = [Path(out_path, p.stem) for p in video_paths]
 
-    assert len(video_paths) == len(out_paths), 'Mismatch between video and ' \
-                                               'output paths'
+    assert len(video_paths) == len(out_paths), \
+        'Mismatch between video and output paths'
 
     video_names = get_videos_to_process(video_paths, out_paths, init_run or force)
 
     # Make sure there are videos to process
     if len(video_names) == 0:
         print('All videos have existing black frame outputs.')
+        sys.stdout.flush()
         return
 
-    pbar = tqdm(total=len(video_paths), desc='Detecting black frames', unit='video')
-    for video_path, out_path in zip(video_paths, out_paths):
+    start_time = time.time()
+    for i, (video_path, out_path) in enumerate(zip(video_paths, out_paths)):
+        print('Detecting black frames: {} ({:0.1f} % done, {} elapsed)'.format(
+            video_path, i / len(video_paths) * 100,
+            format_hmmss(time.time() - start_time)))
+        sys.stdout.flush()
         cmd = [BINARY_PATH, '-n', '1', '-j', str(NUM_THREADS)]
         path_str = '{} {}'.format(video_path, out_path/FILE_BLACK_FRAMES)
         subprocess.run(cmd, input=path_str.encode('utf-8'), check=True)
-        pbar.update()
 
-    pbar.close()
+    print('Done detecting black frames. {} elapsed'.format(
+        format_hmmss(time.time() - start_time)))
+    sys.stdout.flush()
 
 
 def get_videos_to_process(video_paths, out_paths, skip=False):
