@@ -4,6 +4,7 @@ import os
 import argparse
 import tempfile
 import subprocess
+from multiprocessing import Pool
 from tqdm import tqdm
 
 
@@ -17,6 +18,16 @@ def get_args():
     parser.add_argument('-e', '--execute', action='store_true')
     return parser.parse_args()
 
+
+def commit(args):
+    fname, tmp_path, execute = args
+    cloud_path = os.path.join(GCS_VIDEOS_DIR, fname)
+    print('Commit:', fname, cloud_path)
+    if execute:
+        subprocess.check_call([
+            '/snap/bin/gsutil', 'cp', '-n',
+            tmp_path, cloud_path])
+            
 
 def main(file_list, execute):
     print('Reading:', file_list)
@@ -34,16 +45,17 @@ def main(file_list, execute):
     for fname in files:
         assert fname.startswith(prefix), fname
 
+    files = [fpath[len(prefix):] for fpath in files]
+
     print('Found {} files'.format(len(files)))
-    with tempfile.NamedTemporaryFile() as empty_file:
-        for fpath in tqdm(files):
-            fname = fpath[len(prefix):]
-            cloud_path = os.path.join(GCS_VIDEOS_DIR, fname)
-            print('Commit:', fname)
-            if execute:
-                subprocess.check_call([
-                    '/snap/bin/gsutil', 'cp', '-n',
-                    empty_file.name, cloud_path])
+    with tempfile.NamedTemporaryFile() as empty_file, Pool() as workers:
+        tmp_path = empty_file.name
+        worker_args = [(fname, tmp_path, execute) for fname in files]
+
+        for _ in tqdm(
+                workers.imap_unordered(commit, worker_args), total=len(files)
+        ):
+            pass
 
     print('Commited {} files'.format(len(files)))
 
